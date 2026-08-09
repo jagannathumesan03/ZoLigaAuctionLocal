@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Football Auction — Login</title>
+<link rel="stylesheet" href="/static/css/style.css?v=theme-1">
+<script src="/static/js/theme.js?v=theme-1"></script>
+</head>
+<body class="login-page">
+<div class="login-wrap">
+  <main class="login-box" aria-labelledby="loginTitle">
+    <button class="btn btn-sm btn-quiet theme-toggle login-theme-toggle" id="themeToggle" type="button">Light theme</button>
+    <div class="login-mark" aria-hidden="true"><span></span></div>
+    <p class="eyebrow">Tournament control room</p>
+    <h1 id="loginTitle">Football Auction</h1>
+    <div class="sub">Secure access for live auction operations and broadcast viewing.</div>
+
+    <div class="role-toggle" role="tablist" aria-label="Access type">
+      <button class="btn active" id="tabAdmin" type="button" role="tab" aria-selected="true" onclick="switchRole('admin')">Admin access</button>
+      <button class="btn" id="tabViewer" type="button" role="tab" aria-selected="false" onclick="switchRole('viewer')">Viewer access</button>
+    </div>
+
+    <form id="adminForm" aria-label="Admin sign in">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="adminUsername" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="adminPassword" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Login as Admin</button>
+    </form>
+
+    <form id="viewerForm" style="display:none;" aria-label="Viewer sign in">
+      <div class="field">
+        <label>Viewer Password</label>
+        <input type="password" id="viewerPassword" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Login as Viewer</button>
+    </form>
+
+    <div class="error-msg" id="errorMsg" role="alert" aria-live="polite"></div>
+  </main>
+</div>
+
+<script src="/static/js/login.js"></script>
+</body>
+</html>
