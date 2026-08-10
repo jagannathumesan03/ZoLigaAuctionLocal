@@ -5,7 +5,6 @@ let state = {
   recentResult: null,   // { type: 'sold' | 'unsold', player, expiresAt }
   callState: null,      // { call: 'going_once' | 'going_twice', playerId, expiresAt }
   lastSpotlightBid: null,
-  lastBidId: null,
   waitingBackgroundUrl: '',
 };
 
@@ -332,20 +331,17 @@ function resultStateHtml(result) {
 }
 
 // ---------- Hero: current player + current bid ----------
-// Photo + player info on the left; live bid activity fills the empty right
-// side of the spotlight card.
+// Photo + player info on the left; bid history fills the empty right
+// side of the spotlight card (current bid lives in .info only).
 function spotlightBidPanelHtml() {
   return `
-    <aside class="spotlight-bid-panel bid-activity-card dashboard-card" aria-labelledby="bidActivityTitle">
-      <div class="dashboard-heading"><h2 id="bidActivityTitle">Latest bid</h2><span class="activity-caption">Live</span></div>
-      <div id="bidActivity" class="bid-activity"></div>
-      <div class="bid-history-heading"><h3>Bid history</h3></div>
+    <aside class="spotlight-bid-panel bid-activity-card dashboard-card" aria-labelledby="bidHistoryTitle">
+      <div class="dashboard-heading"><h2 id="bidHistoryTitle">Bid history</h2><span class="activity-caption">Live</span></div>
       <div id="bidHistory" class="bid-history-log"></div>
     </aside>`;
 }
 
 function fillSpotlightBidPanels() {
-  renderBidActivity();
   renderBidHistory();
 }
 
@@ -403,44 +399,6 @@ function renderSpotlight() {
   state.lastSpotlightBid = bidAmount;
   fillSpotlightBidPanels();
   renderAuctionTimerDock();
-}
-
-// ---------- Latest bid activity ----------
-function renderBidActivity() {
-  const el = document.getElementById('bidActivity');
-  if (!el) return;
-  const current = state.currentAuction;
-  if (!current) {
-    el.innerHTML = `<div class="bid-activity-empty">No active bidding yet.</div>`;
-    state.lastBidId = null;
-    return;
-  }
-  const history = current.history || [];
-  const bidAmount = current.current_bid_amount || current.base_price;
-  if (!history.length) {
-    el.innerHTML = `
-      <div class="bid-activity-amount">${fmtMoney(bidAmount)}</div>
-      <div class="bid-activity-meta">
-        <span>Current opening bid</span>
-      </div>`;
-    state.lastBidId = null;
-    return;
-  }
-  const latest = history[history.length - 1];
-  const previousAmount = history.length > 1 ? history[history.length - 2].amount : current.base_price;
-  const increment = latest.amount - previousAmount;
-  const isNew = state.lastBidId !== null && state.lastBidId !== latest.id;
-  el.innerHTML = `
-    <div class="bid-activity-amount${isNew ? ' bid-pulse' : ''}">${fmtMoney(latest.amount)}</div>
-    <div class="bid-activity-team">
-      <img src="${bidTeamLogo(latest.team_id)}" alt="">
-      <span>${escapeHtml(latest.team_name || 'Unknown team')}</span>
-    </div>
-    <div class="bid-activity-meta">
-      <span class="bid-activity-increment">+${fmtMoney(increment)}</span>
-      <span class="bid-activity-time" data-ts="${latest.created_at || ''}">${relativeTime(latest.created_at) || 'Just now'}</span>
-    </div>`;
-  state.lastBidId = latest.id;
 }
 
 // ---------- Bid history (newest on top; older bids scroll below) ----------
