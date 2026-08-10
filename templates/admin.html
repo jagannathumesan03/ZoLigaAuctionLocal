@@ -38,16 +38,24 @@
     </div>
 
     <div class="panel bid-workspace" id="bidPanelWrapper" style="display:none;">
-      <div class="panel-heading"><div><p class="eyebrow">Bidding desk</p><h2>Record the next bid</h2></div></div>
+      <div class="panel-heading"><div><p class="eyebrow">Bidding desk</p><h2>One-click team bids</h2></div></div>
       <div id="bidPanel"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel auction-controls">
       <div class="panel-heading list-heading">
-        <div><p class="eyebrow">Player queue</p><h2>Select the next player</h2></div>
-        <input class="search-input" type="search" id="auctionSearch" placeholder="Search name or role" aria-label="Search auction player queue">
+        <div>
+          <p class="eyebrow">Player pool</p>
+          <h2>Start the next auction</h2>
+        </div>
+        <span class="muted" id="auctionPoolCount"></span>
       </div>
-      <div id="auctionPlayerList" class="grid grid-players mt-16"></div>
+      <div class="auction-control-actions mt-16">
+        <button class="btn btn-primary" type="button" id="startAuctionBtn" onclick="startAuction()">
+          Start auction
+        </button>
+        <p class="muted auction-control-hint">Picks a random player from the waiting pool and reveals them on every screen.</p>
+      </div>
     </div>
   </section>
 
@@ -225,6 +233,7 @@
 </div>
 
 <script src="/static/js/confetti.js?v=timer-1"></script>
-<script src="/static/js/admin.js?v=slot-h-1"></script>
+<script src="/static/js/pack-reveal.js?v=slot-h-1"></script>
+<script src="/static/js/admin.js?v=bid-amount-1"></script>
 </body>
 </html>

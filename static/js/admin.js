@@ -4,7 +4,15 @@ let state = {
   auctionTimerSeconds: 120,
   auctionTimerEnabled: true,
   waitingBackgroundUrl: '',
+  startingAuction: false,
+  draftBidAmount: null,
+  draftBidAuctionId: null,
+  draftBidFloor: null,
 };
+
+// Tracks whether we've finished the first paint so a mid-session player
+// change can fire the pack-reveal animation (same as viewer).
+let auctionBaselineReady = false;
 
 // ---------- Auth guard ----------
 (async function guard() {
@@ -61,10 +69,11 @@ async function apiFetch(url, options = {}) {
 // ---------- Init / data load ----------
 async function init() {
   await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction(), loadSettings()]);
+  state.lastAuctionPlayerId = state.currentAuction ? state.currentAuction.id : null;
+  auctionBaselineReady = true;
   renderAll();
   connectSSE();
 
-  document.getElementById('auctionSearch').addEventListener('input', renderAuctionList);
   document.getElementById('playerSearch').addEventListener('input', renderPlayersList);
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
 
@@ -98,7 +107,6 @@ async function loadCurrentAuction() {
   if (newId !== state.lastAuctionPlayerId) {
     // a different player (or no player) is now up for auction — clear the stale team selection
     state.selectedBidTeamId = null;
-    state.lastAuctionPlayerId = newId;
   }
 }
 
@@ -224,7 +232,7 @@ function waitingSpotlightStyle() {
 function renderAll() {
   renderSpotlight();
   renderBidPanel();
-  renderAuctionList();
+  renderAuctionControls();
   renderPlayersList();
   renderTeamsList();
 }
@@ -236,9 +244,22 @@ function connectSSE() {
   const es = new EventSource('/api/events');
   const refresh = async () => {
     state.callState = null;
+    const previousAuctionId = state.lastAuctionPlayerId;
     await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
     detectAndCelebrateSales();
+    const nextAuctionId = state.currentAuction ? state.currentAuction.id : null;
+    const shouldReveal = auctionBaselineReady
+      && nextAuctionId
+      && nextAuctionId !== previousAuctionId
+      && typeof window.playPackReveal === 'function';
+    state.lastAuctionPlayerId = nextAuctionId;
     renderAll();
+    if (shouldReveal) {
+      window.playPackReveal(state.currentAuction, {
+        candidates: state.players,
+        onDone: () => renderSpotlight(),
+      });
+    }
   };
   es.addEventListener('current_player', refresh);
   es.addEventListener('bid_updated', refresh);
@@ -443,6 +464,18 @@ async function resumeAuctionTimer() {
 // ---------- Spotlight ----------
 // The hero of the operator screen too -- name and current bid dominate;
 // everything else (base price, leading team, stats) supports them.
+function previousBidInfo(current) {
+  const history = current.history || [];
+  if (history.length >= 2) {
+    const prev = history[history.length - 2];
+    return { amount: prev.amount, teamName: prev.team_name || 'Unknown team', teamId: prev.team_id };
+  }
+  if (history.length === 1) {
+    return { amount: current.base_price, teamName: 'Starting bid', teamId: null };
+  }
+  return null;
+}
+
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
   const current = state.currentAuction;
@@ -454,13 +487,16 @@ function renderSpotlight() {
         <div class="empty-state">
           <p class="eyebrow">Auction desk</p>
           <h2>No player currently up for auction</h2>
-          <p class="muted">Pick one below to start the countdown.</p>
+          <p class="muted">Press Start auction to draw a random player from the pool.</p>
         </div>
       </div>`;
     return;
   }
   const bidAmount = current.current_bid_amount || current.base_price;
   const hasBids = !!current.current_bid_team_id;
+  const leadingTeam = state.teams.find(team => team.id === current.current_bid_team_id);
+  const previous = previousBidInfo(current);
+  const hasHistory = (current.history || []).length > 0;
   const call = activeCallState();
   container.innerHTML = `
     <div class="spotlight fifa-card ${cardTierClass(current.card_tier)}">
@@ -474,17 +510,29 @@ function renderSpotlight() {
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
-          <span class="eyebrow">Current bid</span>
+          <span class="eyebrow">Highest live bid</span>
           <div class="bid-amount-display" aria-live="polite">${fmtMoney(bidAmount)}</div>
         </div>
         <div class="leading-team-row${hasBids ? ' has-leader' : ''}">
           ${hasBids
-            ? `<span class="leading-team-name">${escapeHtml(current.current_bid_team_name || 'Unknown team')}</span><span class="leading-chip">Leading</span>`
+            ? `<img class="mini-team-logo" src="${leadingTeam && leadingTeam.logo_url ? leadingTeam.logo_url : placeholderImg()}" alt="">
+               <span class="leading-team-name">${escapeHtml(current.current_bid_team_name || 'Unknown team')}</span>
+               <span class="leading-chip">Leading</span>`
             : `<span class="muted">No bids yet — starting at base price</span>`}
         </div>
+        ${previous
+          ? `<div class="previous-bid-row">
+               <span class="eyebrow">Previous bid</span>
+               <strong>${fmtMoney(previous.amount)}</strong>
+               <span class="muted">${escapeHtml(previous.teamName)}</span>
+             </div>`
+          : ''}
         ${statBarsHtml(current)}
         ${current.stats ? `<p class="muted">${escapeHtml(current.stats)}</p>` : ''}
         <div class="player-actions">
+          <button class="btn btn-primary btn-sm" type="button" onclick="sellToLeader()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Sell</button>
+          <button class="btn btn-sm" type="button" onclick="undoLastBid()" ${hasHistory ? '' : 'disabled title="No bids to undo"'}>Undo bid</button>
+          <button class="btn btn-warn btn-sm" type="button" onclick="markUnsold(${current.id})">Mark unsold</button>
           <button class="btn btn-sm" type="button" onclick="markGoingOnce()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Going once</button>
           <button class="btn btn-sm" type="button" onclick="markGoingTwice()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Going twice</button>
           ${(current.auction_ends_at || current.auction_timer_paused)
@@ -492,7 +540,6 @@ function renderSpotlight() {
               ? `<button class="btn btn-primary btn-sm" type="button" onclick="resumeAuctionTimer()">Resume timer</button>`
               : `<button class="btn btn-sm" type="button" onclick="pauseAuctionTimer()">Pause timer</button>`)
             : ''}
-          <button class="btn btn-warn btn-sm" type="button" onclick="markUnsold(${current.id})">Mark unsold</button>
         </div>
       </div>
     </div>`;
@@ -507,99 +554,141 @@ function tierIncrement(amount) {
   return 250000;
 }
 
+function syncDraftBidAmount(current) {
+  const bidAmount = current.current_bid_amount || current.base_price;
+  const nextAmount = bidAmount + tierIncrement(bidAmount);
+  const needsReset = state.draftBidAuctionId !== current.id
+    || state.draftBidFloor !== bidAmount
+    || !state.draftBidAmount
+    || state.draftBidAmount <= bidAmount;
+  if (needsReset) {
+    state.draftBidAmount = nextAmount;
+    state.draftBidAuctionId = current.id;
+    state.draftBidFloor = bidAmount;
+  }
+  return { bidAmount, nextAmount, draftAmount: state.draftBidAmount };
+}
+
 function renderBidPanel() {
   const wrapper = document.getElementById('bidPanel');
   const current = state.currentAuction;
-  if (!current) { wrapper.innerHTML = ''; return; }
-
-  // default the selection to whoever is currently leading, if the admin hasn't picked yet
-  if (!state.selectedBidTeamId && current.current_bid_team_id) {
-    state.selectedBidTeamId = current.current_bid_team_id;
+  if (!current) {
+    wrapper.innerHTML = '';
+    state.draftBidAmount = null;
+    state.draftBidAuctionId = null;
+    state.draftBidFloor = null;
+    return;
   }
 
-  const bidAmount = current.current_bid_amount || current.base_price;
+  const { bidAmount, nextAmount, draftAmount } = syncDraftBidAmount(current);
   const inc = tierIncrement(bidAmount);
-  const tiers = [inc, inc * 2, inc * 5];
-  const eligibleTeams = state.teams.filter(t => t.squad.length < t.slots_max);
+  const hasBids = !!current.current_bid_team_id;
+  const hasHistory = (current.history || []).length > 0;
 
-  const teamButtonsHtml = state.teams.map(t => {
+  const teamTilesHtml = state.teams.map(t => {
     const full = t.squad.length >= t.slots_max;
-    const active = state.selectedBidTeamId === t.id;
-    return `<button type="button" class="btn team-bid-btn ${active ? 'active' : ''}" aria-pressed="${active}" ${full ? 'disabled' : ''} onclick="selectBidTeam(${t.id})">
-      ${escapeHtml(t.name)}${full ? ' <small>(full)</small>' : ''}
-    </button>`;
+    const cantAfford = t.purse_remaining < draftAmount;
+    const leading = current.current_bid_team_id === t.id;
+    const disabled = full || cantAfford;
+    const reason = full ? 'Squad full' : (cantAfford ? 'Insufficient purse' : `Bid ${fmtMoney(draftAmount)}`);
+    const pct = t.purse_total ? Math.max(0, Math.min(100, Math.round((t.purse_remaining / t.purse_total) * 100))) : 0;
+    return `
+      <button type="button"
+        class="auction-team-tile${leading ? ' is-leading' : ''}${disabled ? ' is-disabled' : ''}"
+        ${disabled ? 'disabled' : ''}
+        onclick="oneClickBid(${t.id})"
+        title="${escapeHtml(reason)}">
+        <img class="auction-team-tile-logo" src="${t.logo_url || placeholderImg()}" alt="">
+        <div class="auction-team-tile-main">
+          <strong class="auction-team-tile-name">${escapeHtml(t.name)}</strong>
+          <span class="auction-team-tile-meta">${t.squad.length}/${t.slots_max} slots · ${fmtMoney(t.purse_remaining)}</span>
+          <span class="purse-bar"><span class="purse-bar-fill" style="width:${pct}%"></span></span>
+          <span class="auction-team-tile-action">${disabled ? reason : fmtMoney(draftAmount)}</span>
+        </div>
+      </button>`;
   }).join('');
 
-  const tierButtonsHtml = tiers.map(delta => `
-    <button type="button" class="btn bid-tier-btn" ${eligibleTeams.length ? '' : 'disabled'} onclick="quickBid(${delta})">
-      ${fmtMoney(bidAmount + delta)}
-      <small>+${fmtMoney(delta)}</small>
-    </button>
-  `).join('');
-
-  const bidHistoryItems = (current.history || []).map(h => `
-        <div class="bid-history-item">
-          <span>${escapeHtml(h.team_name || 'Unknown team')}</span>
+  const bidHistoryItems = [...(current.history || [])].reverse().map((h, index) => `
+        <div class="bid-history-item${index === 0 ? ' is-current' : ''}">
+          <span class="bid-history-team">
+            <img src="${bidTeamLogo(h.team_id)}" alt="">
+            ${escapeHtml(h.team_name || 'Unknown team')}
+          </span>
           <span class="player-price">${fmtMoney(h.amount)}</span>
           <span class="bid-history-time" data-ts="${h.created_at || ''}">${relativeTime(h.created_at)}</span>
         </div>`).join('');
   const startingBidItem = `
-        <div class="bid-history-item bid-history-start">
-          <span>Starting bid</span>
+        <div class="bid-history-item bid-history-start${!hasHistory ? ' is-current' : ''}">
+          <span class="bid-history-team">Starting bid</span>
           <span class="player-price">${fmtMoney(current.base_price)}</span>
           <span class="bid-history-time"></span>
         </div>`;
-  const historyHtml = startingBidItem + bidHistoryItems;
 
   wrapper.innerHTML = `
-    <div class="bid-summary"><span>Current bid</span><strong>${fmtMoney(bidAmount)}</strong><span>Minimum next bid: ${fmtMoney(bidAmount + inc)}</span></div>
-    <label>Choose the bidding team</label>
-    <div class="bid-team-buttons">${teamButtonsHtml}</div>
-    <label>Quick raise</label>
-    <div class="bid-tier-buttons">${tierButtonsHtml}</div>
-    <label>Custom increment (1 - 1,000,000)</label>
-    <div class="bid-stepper">
-      <input type="number" id="bidCustomIncrement" min="1" max="1000000" value="10000">
-      <button type="button" class="btn btn-primary btn-sm" ${eligibleTeams.length ? '' : 'disabled'} onclick="customBid()">+ Add to bid</button>
+    <div class="bid-summary">
+      <span>Highest live bid</span>
+      <strong>${fmtMoney(bidAmount)}</strong>
+      <span>Minimum next: ${fmtMoney(nextAmount)}</span>
     </div>
-    <label>Bid history</label>
-    <div class="bid-history-log">${historyHtml}</div>
-    <div class="row mt-16">
-      <button type="button" class="btn btn-primary" onclick="openAssignModal(${current.id})">Finalize Sale</button>
+    <div class="bid-amount-editor">
+      <label for="manualBidAmount">Bid amount (editable)</label>
+      <div class="bid-amount-editor-row">
+        <input type="number" id="manualBidAmount" min="${bidAmount + 1}" step="1000" value="${draftAmount}" oninput="onManualBidInput(this)">
+        <strong class="bid-amount-preview" id="manualBidPreview">${fmtMoney(draftAmount)}</strong>
+      </div>
+      <div class="bid-tier-buttons">
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${nextAmount})">${fmtMoney(nextAmount)}<small>Min raise</small></button>
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${bidAmount + inc * 2})">${fmtMoney(bidAmount + inc * 2)}<small>+${fmtMoney(inc * 2)}</small></button>
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${bidAmount + inc * 5})">${fmtMoney(bidAmount + inc * 5)}<small>+${fmtMoney(inc * 5)}</small></button>
+      </div>
     </div>
+    <label>Teams — tap a tile to place the amount above</label>
+    <div class="auction-team-tiles">${teamTilesHtml || '<div class="empty">No teams yet.</div>'}</div>
+    <div class="row mt-16 auction-desk-actions">
+      <button type="button" class="btn btn-primary" onclick="sellToLeader()" ${hasBids ? '' : 'disabled'}>Sell to leader</button>
+      <button type="button" class="btn" onclick="undoLastBid()" ${hasHistory ? '' : 'disabled'}>Undo last bid</button>
+      <button type="button" class="btn btn-quiet btn-sm" onclick="openAssignModal(${current.id})">Sell with override…</button>
+    </div>
+    <label class="mt-16">Bid history</label>
+    <div class="bid-history-log">${bidHistoryItems + startingBidItem}</div>
   `;
 }
 
-function selectBidTeam(teamId) {
-  state.selectedBidTeamId = state.selectedBidTeamId === teamId ? null : teamId;
+function bidTeamLogo(teamId) {
+  const team = state.teams.find(candidate => candidate.id === teamId);
+  return team && team.logo_url ? team.logo_url : placeholderImg();
+}
+
+function onManualBidInput(el) {
+  const value = parseInt(el.value, 10);
+  state.draftBidAmount = Number.isFinite(value) ? value : null;
+  const preview = document.getElementById('manualBidPreview');
+  if (preview) preview.textContent = state.draftBidAmount ? fmtMoney(state.draftBidAmount) : '—';
+  document.querySelectorAll('.auction-team-tile:not(:disabled) .auction-team-tile-action').forEach(node => {
+    node.textContent = state.draftBidAmount ? fmtMoney(state.draftBidAmount) : 'Set amount';
+  });
+}
+
+function setManualBidAmount(amount) {
+  state.draftBidAmount = amount;
   renderBidPanel();
+  const input = document.getElementById('manualBidAmount');
+  if (input) input.focus();
 }
 
-function selectedBidTeam() {
-  if (!state.selectedBidTeamId) { toast('Pick a team before placing a bid', true); return null; }
-  return state.selectedBidTeamId;
-}
-
-async function quickBid(delta) {
-  const teamId = selectedBidTeam();
-  if (!teamId) return;
+async function oneClickBid(teamId) {
   const current = state.currentAuction;
+  if (!current) return;
   const bidAmount = current.current_bid_amount || current.base_price;
-  await placeBid(teamId, bidAmount + delta);
-}
-
-async function customBid() {
-  const teamId = selectedBidTeam();
-  if (!teamId) return;
-  const incrementInput = document.getElementById('bidCustomIncrement');
-  const increment = parseInt(incrementInput.value);
-  if (!increment || increment < 1 || increment > 1000000) {
-    toast('Enter an increment between 1 and 1,000,000', true);
+  const input = document.getElementById('manualBidAmount');
+  const typed = input ? parseInt(input.value, 10) : NaN;
+  const amount = Number.isFinite(typed) ? typed : (state.draftBidAmount || bidAmount + tierIncrement(bidAmount));
+  if (amount <= bidAmount) {
+    toast(`Bid must be higher than ${fmtMoney(bidAmount)}`, true);
     return;
   }
-  const current = state.currentAuction;
-  const bidAmount = current.current_bid_amount || current.base_price;
-  await placeBid(teamId, bidAmount + increment);
+  state.draftBidAmount = amount;
+  await placeBid(teamId, amount);
 }
 
 async function placeBid(teamId, amount) {
@@ -615,42 +704,75 @@ async function placeBid(teamId, amount) {
   } catch (e) { toast(e.message, true); }
 }
 
-// ---------- Auction tab: pick next player ----------
-function renderAuctionList() {
-  const q = document.getElementById('auctionSearch').value.toLowerCase();
-  const list = state.players.filter(p =>
-    (p.status === 'waiting' || p.status === 'unsold') &&
-    (p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q))
-  );
-  const container = document.getElementById('auctionPlayerList');
-  if (!list.length) { container.innerHTML = `<div class="empty">No players waiting.</div>`; return; }
-  container.innerHTML = list.map(p => `
-    <div class="player-card fifa-card ${cardTierClass(p.card_tier)}">
-      ${ovrBadgeHtml(p)}
-      <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
-      <div class="player-name">${escapeHtml(p.name)}</div>
-      <div class="player-meta">${escapeHtml(p.role || '')}</div>
-      <div class="player-price">${fmtMoney(p.base_price)}</div>
-      ${statusBadge(p.status)}
-      ${statGridHtml(p)}
-      <div class="player-actions">
-        <button class="btn btn-primary btn-sm" onclick="setCurrent(${p.id})">Put Up for Auction</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-async function setCurrent(playerId) {
+async function undoLastBid() {
   try {
-    await apiFetch('/api/auction/set-current', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player_id: playerId }),
-    });
-    toast('Player is now up for auction');
+    await apiFetch('/api/auction/undo-bid', { method: 'POST' });
     await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
     renderAll();
-    document.querySelector('.tab[data-tab="auction"]').click();
+    toast('Last bid undone');
   } catch (e) { toast(e.message, true); }
+}
+
+async function sellToLeader() {
+  const current = state.currentAuction;
+  if (!current || !current.current_bid_team_id) {
+    toast('Needs a leading bidder to sell', true);
+    return;
+  }
+  const amount = current.current_bid_amount || current.base_price;
+  const teamName = current.current_bid_team_name || 'the leading team';
+  if (!confirm(`Sell ${current.name} to ${teamName} for ${fmtMoney(amount)}?`)) return;
+  try {
+    await apiFetch('/api/auction/assign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_id: current.id,
+        team_id: current.current_bid_team_id,
+        sold_price: amount,
+      }),
+    });
+    toast(`Sold to ${teamName}`);
+    await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
+    renderAll();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- Auction tab: start random draw ----------
+function poolPlayers() {
+  return state.players.filter(p => p.status === 'waiting' || p.status === 'unsold');
+}
+
+function renderAuctionControls() {
+  const countEl = document.getElementById('auctionPoolCount');
+  const btn = document.getElementById('startAuctionBtn');
+  if (!btn) return;
+  const pool = poolPlayers();
+  if (state.currentAuction) state.startingAuction = false;
+  const busy = !!state.currentAuction || state.startingAuction;
+  if (countEl) {
+    countEl.textContent = pool.length
+      ? `${pool.length} player${pool.length === 1 ? '' : 's'} ready`
+      : 'Pool empty';
+  }
+  btn.disabled = busy || pool.length === 0;
+  btn.textContent = state.startingAuction
+    ? 'Starting…'
+    : (state.currentAuction ? 'Auction in progress' : 'Start auction');
+}
+
+async function startAuction() {
+  if (state.startingAuction || state.currentAuction) return;
+  state.startingAuction = true;
+  renderAuctionControls();
+  try {
+    await apiFetch('/api/auction/start', { method: 'POST' });
+    toast('Random player drawn — revealing…');
+    // Keep the button locked until SSE refresh sets currentAuction.
+  } catch (e) {
+    state.startingAuction = false;
+    renderAuctionControls();
+    toast(e.message, true);
+  }
 }
 
 async function markUnsold(playerId) {

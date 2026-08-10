@@ -1,7 +1,7 @@
 // ---------- Slot-machine player reveal (horizontal) ----------
-// Plays on the viewer when a new player is put up for auction: a horizontal
-// reel spins through candidate cards and lands on the selected player.
-// Keep TOTAL_MS in sync with backend PACK_REVEAL_SECONDS (5s).
+// Plays on viewer and admin when a new player is put up for auction: a
+// horizontal reel spins through candidate cards and lands on the selected
+// player. Keep TOTAL_MS in sync with backend PACK_REVEAL_SECONDS (5s).
 // Exposes window.playPackReveal(player, { onDone, candidates }).
 
 (function () {

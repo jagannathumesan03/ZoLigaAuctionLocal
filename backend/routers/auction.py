@@ -1,4 +1,5 @@
 import asyncio
+import random
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Request, Depends, HTTPException
@@ -147,62 +148,88 @@ def current_player(request: Request, _=Depends(require_any)):
 @router.post("/set-current")
 async def set_current(body: PlayerIdBody, request: Request, _=Depends(require_admin)):
     with db_cursor() as cur:
-        cur.execute("SELECT * FROM players WHERE id = ?", (body.player_id,))
-        player = cur.fetchone()
-        if not player:
-            raise HTTPException(status_code=404, detail="Player not found")
-        if player["status"] == "sold":
-            raise HTTPException(status_code=400, detail="Player already sold")
-
-        # clear any other player currently marked as 'auction' and its bid state
-        cur.execute("SELECT id FROM players WHERE status = 'auction'")
-        for prev in cur.fetchall():
-            clear_bid_state(cur, prev["id"])
-        cur.execute(
-            """
-            UPDATE players
-            SET status = 'waiting',
-                auction_ends_at=NULL,
-                auction_timer_paused=0,
-                auction_remaining_seconds=NULL,
-                auction_reveal_until=NULL
-            WHERE status = 'auction'
-            """
-        )
-
-        timer_enabled = is_auction_timer_enabled(cur)
-        timer_seconds = get_auction_timer_seconds(cur) if timer_enabled else 0
-        now = utc_now()
-        reveal_until_dt = now + timedelta(seconds=PACK_REVEAL_SECONDS)
-        reveal_until = to_iso(reveal_until_dt)
-        # Timer only starts after the pack reveal window, so auction duration
-        # is preserved in full once the card flip finishes. When the timer is
-        # disabled in settings, leave auction_ends_at empty so nothing expires.
-        ends_at = (
-            to_iso(reveal_until_dt + timedelta(seconds=timer_seconds))
-            if timer_enabled
-            else None
-        )
-
-        # fresh bid state for the newly selected player, starting at base price
-        clear_bid_state(cur, body.player_id)
-        cur.execute(
-            """
-            UPDATE players
-            SET status = 'auction',
-                current_bid_amount = base_price,
-                auction_ends_at = ?,
-                auction_timer_paused = 0,
-                auction_remaining_seconds = NULL,
-                auction_reveal_until = ?
-            WHERE id = ?
-            """,
-            (ends_at, reveal_until, body.player_id),
-        )
-        result = attach_auction_payload(cur, full_player(cur, body.player_id))
-
+        result = put_player_up(cur, body.player_id)
     await broadcaster.publish("current_player", result)
     return result
+
+
+@router.post("/start")
+async def start_auction(request: Request, _=Depends(require_admin)):
+    """Pick a random waiting/unsold player and put them up for auction."""
+    with db_cursor() as cur:
+        cur.execute("SELECT id FROM players WHERE status = 'auction' LIMIT 1")
+        if cur.fetchone():
+            raise HTTPException(
+                status_code=400,
+                detail="A player is already up for auction — finish or mark unsold first",
+            )
+        cur.execute(
+            "SELECT id FROM players WHERE status IN ('waiting', 'unsold') ORDER BY id"
+        )
+        pool = cur.fetchall()
+        if not pool:
+            raise HTTPException(status_code=400, detail="No players left in the pool")
+        chosen_id = random.choice(pool)["id"]
+        result = put_player_up(cur, chosen_id)
+    await broadcaster.publish("current_player", result)
+    return result
+
+
+def put_player_up(cur, player_id: int):
+    """Mark player as auction current; clears any previous auction player."""
+    cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
+    player = cur.fetchone()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    if player["status"] == "sold":
+        raise HTTPException(status_code=400, detail="Player already sold")
+
+    # clear any other player currently marked as 'auction' and its bid state
+    cur.execute("SELECT id FROM players WHERE status = 'auction'")
+    for prev in cur.fetchall():
+        clear_bid_state(cur, prev["id"])
+    cur.execute(
+        """
+        UPDATE players
+        SET status = 'waiting',
+            auction_ends_at=NULL,
+            auction_timer_paused=0,
+            auction_remaining_seconds=NULL,
+            auction_reveal_until=NULL
+        WHERE status = 'auction'
+        """
+    )
+
+    timer_enabled = is_auction_timer_enabled(cur)
+    timer_seconds = get_auction_timer_seconds(cur) if timer_enabled else 0
+    now = utc_now()
+    reveal_until_dt = now + timedelta(seconds=PACK_REVEAL_SECONDS)
+    reveal_until = to_iso(reveal_until_dt)
+    # Timer only starts after the pack reveal window, so auction duration
+    # is preserved in full once the card flip finishes. When the timer is
+    # disabled in settings, leave auction_ends_at empty so nothing expires.
+    ends_at = (
+        to_iso(reveal_until_dt + timedelta(seconds=timer_seconds))
+        if timer_enabled
+        else None
+    )
+
+    # fresh bid state for the newly selected player, starting at base price
+    clear_bid_state(cur, player_id)
+    cur.execute(
+        """
+        UPDATE players
+        SET status = 'auction',
+            current_bid_amount = base_price,
+            auction_ends_at = ?,
+            auction_timer_paused = 0,
+            auction_remaining_seconds = NULL,
+            auction_reveal_until = ?
+        WHERE id = ?
+        """,
+        (ends_at, reveal_until, player_id),
+    )
+    return attach_auction_payload(cur, full_player(cur, player_id))
 
 
 @router.post("/timer/pause")
@@ -304,6 +331,45 @@ async def place_bid(body: BidBody, request: Request, _=Depends(require_admin)):
             (body.amount, body.team_id, body.player_id),
         )
         result = attach_auction_payload(cur, full_player(cur, body.player_id))
+
+    await broadcaster.publish("bid_updated", result)
+    return result
+
+
+@router.post("/undo-bid")
+async def undo_bid(request: Request, _=Depends(require_admin)):
+    """Remove the latest bid on the current auction player and restore the prior lead."""
+    with db_cursor() as cur:
+        cur.execute("SELECT * FROM players WHERE status = 'auction' LIMIT 1")
+        player = cur.fetchone()
+        if not player:
+            raise HTTPException(status_code=400, detail="No player is currently up for auction")
+
+        history = get_bid_history(cur, player["id"])
+        if not history:
+            raise HTTPException(status_code=400, detail="No bids to undo")
+
+        last = history[-1]
+        cur.execute("DELETE FROM bid_history WHERE id = ?", (last["id"],))
+
+        if len(history) >= 2:
+            prev = history[-2]
+            cur.execute(
+                "UPDATE players SET current_bid_amount=?, current_bid_team_id=? WHERE id=?",
+                (prev["amount"], prev["team_id"], player["id"]),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE players
+                SET current_bid_amount = base_price,
+                    current_bid_team_id = NULL
+                WHERE id = ?
+                """,
+                (player["id"],),
+            )
+
+        result = attach_auction_payload(cur, full_player(cur, player["id"]))
 
     await broadcaster.publish("bid_updated", result)
     return result
