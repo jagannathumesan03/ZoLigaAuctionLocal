@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=broadcast-1">
+<link rel="stylesheet" href="/static/css/style.css?v=slot-h-1">
 <script src="/static/js/theme.js?v=theme-1"></script>
 </head>
 <body class="admin-page">
@@ -24,6 +24,7 @@
     <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="auction">Live auction</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="players">Player pool</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="teams">Teams</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab="settings">Settings</button>
   </nav>
 
   <!-- ===================== AUCTION TAB ===================== -->
@@ -85,6 +86,59 @@
         <button class="btn btn-primary btn-sm" type="button" onclick="openTeamModal()">Add team</button>
       </div>
       <div id="teamsList" class="grid grid-teams mt-16"></div>
+    </div>
+  </section>
+
+  <!-- ===================== SETTINGS TAB ===================== -->
+  <section class="tab-content" id="tab-settings" role="tabpanel">
+    <div class="panel">
+      <div class="panel-heading">
+        <div><p class="eyebrow">Auction preferences</p><h1>Settings</h1></div>
+      </div>
+      <form id="settingsForm" class="settings-form mt-16">
+        <div class="field">
+          <label class="settings-toggle">
+            <input type="checkbox" id="timerEnabled" checked>
+            <span>Enable auction timer</span>
+          </label>
+          <p class="muted settings-help">When enabled, a countdown starts after the player reveal. When it hits zero, the leading bidder wins automatically.</p>
+        </div>
+        <div class="field" id="timerDurationFields">
+          <label for="timerMinutes">Timer duration</label>
+          <div class="row settings-timer-row">
+            <div class="field">
+              <label for="timerMinutes">Minutes</label>
+              <input type="number" id="timerMinutes" min="0" max="60" value="2" required>
+            </div>
+            <div class="field">
+              <label for="timerSeconds">Seconds</label>
+              <input type="number" id="timerSeconds" min="0" max="59" value="0" required>
+            </div>
+          </div>
+        </div>
+        <div class="row mt-16">
+          <button type="submit" class="btn btn-primary">Save timer settings</button>
+          <span class="muted" id="settingsStatus" aria-live="polite"></span>
+        </div>
+      </form>
+
+      <div class="settings-divider"></div>
+
+      <div class="field settings-bg-block">
+        <label>Waiting desk background</label>
+        <p class="muted settings-help">Shown on the viewer when no player is currently up for auction.</p>
+        <div class="settings-bg-preview-wrap">
+          <div class="settings-bg-preview" id="waitingBgPreview" aria-hidden="true"></div>
+          <p class="muted" id="waitingBgEmpty">No photo uploaded yet — the default blue desk will be used.</p>
+        </div>
+        <div class="row mt-16 toolbar-actions">
+          <label class="btn btn-sm upload-button">
+            Upload photo
+            <input type="file" accept="image/*" id="waitingBgInput" style="display:none" onchange="uploadWaitingBackground(event)">
+          </label>
+          <button type="button" class="btn btn-sm btn-warn" id="waitingBgClearBtn" style="display:none;" onclick="clearWaitingBackground()">Remove photo</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -170,7 +224,7 @@
   </div>
 </div>
 
-<script src="/static/js/confetti.js?v=1"></script>
-<script src="/static/js/admin.js?v=broadcast-1"></script>
+<script src="/static/js/confetti.js?v=timer-1"></script>
+<script src="/static/js/admin.js?v=slot-h-1"></script>
 </body>
 </html>

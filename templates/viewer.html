@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Auction — Football Tournament</title>
-<link rel="stylesheet" href="/static/css/style.css?v=broadcast-1">
+<link rel="stylesheet" href="/static/css/style.css?v=no-nextup-1">
 <script src="/static/js/theme.js?v=theme-1"></script>
 </head>
 <body class="viewer-page">
@@ -26,25 +26,13 @@
   </div>
 </header>
 
+<div id="auctionTimerDock" class="auction-timer-dock" aria-live="polite"></div>
+
 <main class="container viewer-shell">
 
   <section class="auction-broadcast" aria-labelledby="liveAuctionTitle">
     <h1 class="sr-only" id="liveAuctionTitle">Live auction dashboard</h1>
     <div id="spotlight"></div>
-  </section>
-
-  <section class="auction-secondary-row" aria-label="Bid activity and next player">
-    <section class="dashboard-card bid-activity-card" aria-labelledby="bidActivityTitle">
-      <div class="dashboard-heading"><h2 id="bidActivityTitle">Latest bid</h2><span class="activity-caption">Live</span></div>
-      <div id="bidActivity" class="bid-activity"></div>
-      <div class="bid-history-heading"><h3>Bid history</h3></div>
-      <div id="bidHistory" class="bid-history-log"></div>
-    </section>
-
-    <section class="dashboard-card next-up-card" aria-labelledby="nextUpTitle">
-      <div class="dashboard-heading"><h2 id="nextUpTitle">Up next</h2><span class="deck-badge">On deck</span></div>
-      <div id="nextUp"></div>
-    </section>
   </section>
 
   <section class="auction-status-strip" id="auctionOverview" aria-label="Auction status"></section>
@@ -84,7 +72,8 @@
 
 </main>
 
-<script src="/static/js/confetti.js?v=1"></script>
-<script src="/static/js/viewer.js?v=broadcast-1"></script>
+<script src="/static/js/confetti.js?v=timer-1"></script>
+<script src="/static/js/pack-reveal.js?v=slot-h-1"></script>
+<script src="/static/js/viewer.js?v=no-nextup-1"></script>
 </body>
 </html>

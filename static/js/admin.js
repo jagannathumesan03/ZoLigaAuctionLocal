@@ -1,6 +1,9 @@
 let state = {
   players: [], teams: [], currentAuction: null, selectedBidTeamId: null, lastAuctionPlayerId: null,
   callState: null, // { call: 'going_once' | 'going_twice', playerId, expiresAt } -- ephemeral, never persisted
+  auctionTimerSeconds: 120,
+  auctionTimerEnabled: true,
+  waitingBackgroundUrl: '',
 };
 
 // ---------- Auth guard ----------
@@ -57,7 +60,7 @@ async function apiFetch(url, options = {}) {
 
 // ---------- Init / data load ----------
 async function init() {
-  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
+  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction(), loadSettings()]);
   renderAll();
   connectSSE();
 
@@ -68,6 +71,11 @@ async function init() {
   document.getElementById('playerForm').addEventListener('submit', submitPlayerForm);
   document.getElementById('teamForm').addEventListener('submit', submitTeamForm);
   document.getElementById('assignForm').addEventListener('submit', submitAssignForm);
+  document.getElementById('settingsForm').addEventListener('submit', submitSettingsForm);
+  document.getElementById('timerEnabled').addEventListener('change', () => {
+    state.auctionTimerEnabled = !!document.getElementById('timerEnabled').checked;
+    fillSettingsForm();
+  });
 
   setInterval(() => {
     document.querySelectorAll('[data-ts]').forEach(el => {
@@ -75,6 +83,7 @@ async function init() {
       if (ts) el.textContent = relativeTime(ts);
     });
   }, 5000);
+  setInterval(tickAuctionTimer, 250);
 }
 
 async function loadPlayers() {
@@ -91,6 +100,125 @@ async function loadCurrentAuction() {
     state.selectedBidTeamId = null;
     state.lastAuctionPlayerId = newId;
   }
+}
+
+async function loadSettings() {
+  const data = await apiFetch('/api/settings');
+  state.auctionTimerSeconds = data.auction_timer_seconds || 120;
+  state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+  state.waitingBackgroundUrl = data.waiting_background_url || '';
+  fillSettingsForm();
+}
+
+function fillSettingsForm() {
+  const total = state.auctionTimerSeconds || 120;
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  const minutesEl = document.getElementById('timerMinutes');
+  const secondsEl = document.getElementById('timerSeconds');
+  const enabledEl = document.getElementById('timerEnabled');
+  const durationFields = document.getElementById('timerDurationFields');
+  if (minutesEl) minutesEl.value = minutes;
+  if (secondsEl) secondsEl.value = seconds;
+  if (enabledEl) enabledEl.checked = !!state.auctionTimerEnabled;
+  if (durationFields) durationFields.style.opacity = state.auctionTimerEnabled ? '1' : '0.45';
+  if (minutesEl) minutesEl.disabled = !state.auctionTimerEnabled;
+  if (secondsEl) secondsEl.disabled = !state.auctionTimerEnabled;
+  renderWaitingBgPreview();
+}
+
+function renderWaitingBgPreview() {
+  const preview = document.getElementById('waitingBgPreview');
+  const empty = document.getElementById('waitingBgEmpty');
+  const clearBtn = document.getElementById('waitingBgClearBtn');
+  if (!preview) return;
+  const url = state.waitingBackgroundUrl;
+  if (url) {
+    preview.style.backgroundImage = `url("${url}")`;
+    preview.classList.add('has-image');
+    if (empty) empty.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = '';
+  } else {
+    preview.style.backgroundImage = '';
+    preview.classList.remove('has-image');
+    if (empty) empty.style.display = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+}
+
+async function submitSettingsForm(e) {
+  e.preventDefault();
+  const enabled = !!document.getElementById('timerEnabled').checked;
+  const minutes = parseInt(document.getElementById('timerMinutes').value, 10) || 0;
+  const seconds = parseInt(document.getElementById('timerSeconds').value, 10) || 0;
+  const total = Math.max(5, minutes * 60 + seconds);
+  const status = document.getElementById('settingsStatus');
+  try {
+    const data = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auction_timer_seconds: total,
+        auction_timer_enabled: enabled,
+      }),
+    });
+    state.auctionTimerSeconds = data.auction_timer_seconds;
+    state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+    state.waitingBackgroundUrl = data.waiting_background_url || state.waitingBackgroundUrl;
+    fillSettingsForm();
+    status.textContent = enabled
+      ? 'Saved — timer applies to the next player put up for auction.'
+      : 'Saved — auction timer is disabled.';
+    toast(enabled ? 'Auction timer updated' : 'Auction timer disabled');
+    if (state.currentAuction) {
+      await loadCurrentAuction();
+      renderSpotlight();
+    }
+  } catch (err) {
+    status.textContent = '';
+    toast(err.message, true);
+  }
+}
+
+async function uploadWaitingBackground(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const form = new FormData();
+  form.append('photo', file);
+  try {
+    const res = await fetch('/api/settings/waiting-background', { method: 'POST', body: form });
+    if (!res.ok) {
+      let detail = 'Upload failed';
+      try { detail = (await res.json()).detail || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    state.waitingBackgroundUrl = data.waiting_background_url || '';
+    renderWaitingBgPreview();
+    renderSpotlight();
+    toast('Waiting desk background updated');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function clearWaitingBackground() {
+  try {
+    const data = await apiFetch('/api/settings/waiting-background', { method: 'DELETE' });
+    state.waitingBackgroundUrl = data.waiting_background_url || '';
+    renderWaitingBgPreview();
+    renderSpotlight();
+    toast('Waiting desk background removed');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+function waitingSpotlightStyle() {
+  const url = state.waitingBackgroundUrl;
+  if (!url) return '';
+  return ` style="--waiting-bg-image: url('${String(url).replace(/'/g, "\\'")}')"`;
 }
 
 function renderAll() {
@@ -118,8 +246,21 @@ function connectSSE() {
   es.addEventListener('player_unsold', refresh);
   es.addEventListener('player_reset', refresh);
   es.addEventListener('team_updated', refresh);
+  es.addEventListener('timer_paused', refresh);
+  es.addEventListener('timer_resumed', refresh);
   es.addEventListener('auction_call', (e) => {
     try { setCallState(JSON.parse(e.data)); } catch (err) { /* ignore malformed payload */ }
+  });
+  es.addEventListener('settings_updated', async (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      state.auctionTimerSeconds = data.auction_timer_seconds || state.auctionTimerSeconds;
+      state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+      state.waitingBackgroundUrl = data.waiting_background_url || '';
+      fillSettingsForm();
+      if (state.currentAuction) await loadCurrentAuction();
+      renderSpotlight();
+    } catch (err) { /* ignore */ }
   });
   es.onopen = () => setConnectionStatus(true);
   es.onerror = () => setConnectionStatus(false);
@@ -174,6 +315,10 @@ function callBannerHtml(call) {
 async function announceCall(call) {
   const current = state.currentAuction;
   if (!current) return;
+  if (!current.current_bid_team_id) {
+    toast('Place a bid for a team before calling going once / twice', true);
+    return;
+  }
   try {
     await apiFetch('/api/auction/call', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -184,6 +329,117 @@ async function announceCall(call) {
 function markGoingOnce() { announceCall('going_once'); }
 function markGoingTwice() { announceCall('going_twice'); }
 
+// ---------- Auction countdown ----------
+function remainingMs(endsAt) {
+  if (!endsAt) return null;
+  const end = Date.parse(endsAt);
+  if (Number.isNaN(end)) return null;
+  return end - Date.now();
+}
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function auctionClockMs(player) {
+  if (!player) return null;
+  if (player.auction_timer_paused) {
+    const remaining = player.auction_remaining_seconds;
+    if (remaining === null || remaining === undefined) return null;
+    return Math.max(0, Number(remaining) * 1000);
+  }
+  if (!player.auction_ends_at) return null;
+  const end = Date.parse(player.auction_ends_at);
+  if (Number.isNaN(end)) return null;
+  // Freeze the displayed auction time until the pack-reveal window ends.
+  let effectiveNow = Date.now();
+  if (player.auction_reveal_until) {
+    const revealUntil = Date.parse(player.auction_reveal_until);
+    if (!Number.isNaN(revealUntil) && effectiveNow < revealUntil) {
+      effectiveNow = revealUntil;
+    }
+  }
+  return end - effectiveNow;
+}
+
+function isAuctionRevealing(player) {
+  if (!player || player.auction_timer_paused || !player.auction_reveal_until) return false;
+  const revealUntil = Date.parse(player.auction_reveal_until);
+  return !Number.isNaN(revealUntil) && Date.now() < revealUntil;
+}
+
+function auctionTimerHtml(player) {
+  if (!player) return '';
+  const paused = !!player.auction_timer_paused;
+  const hasClock = paused || !!player.auction_ends_at;
+  if (!hasClock) return '';
+  const revealing = isAuctionRevealing(player);
+  const ms = auctionClockMs(player);
+  if (ms === null) return '';
+  const urgent = !paused && !revealing && ms <= 15000;
+  let attrs = '';
+  if (paused) {
+    attrs = ` data-paused="1" data-remaining-ms="${Math.round(ms)}"`;
+  } else {
+    attrs = ` data-ends-at="${escapeHtml(player.auction_ends_at || '')}"`;
+    if (player.auction_reveal_until) {
+      attrs += ` data-reveal-until="${escapeHtml(player.auction_reveal_until)}"`;
+    }
+  }
+  const label = paused ? 'Paused' : (revealing ? 'Get ready' : 'Time left');
+  return `
+    <div class="auction-timer${urgent ? ' is-urgent' : ''}${paused ? ' is-paused' : ''}${revealing ? ' is-revealing' : ''}"${attrs} aria-live="polite">
+      <span class="auction-timer-label">${label}</span>
+      <span class="auction-timer-value">${formatCountdown(ms)}</span>
+    </div>`;
+}
+
+function tickAuctionTimer() {
+  document.querySelectorAll('.auction-timer').forEach(el => {
+    if (el.getAttribute('data-paused') === '1') return;
+    const endsAt = el.getAttribute('data-ends-at');
+    if (!endsAt) return;
+    const revealUntil = el.getAttribute('data-reveal-until');
+    let effectiveNow = Date.now();
+    let revealing = false;
+    if (revealUntil) {
+      const revealMs = Date.parse(revealUntil);
+      if (!Number.isNaN(revealMs) && effectiveNow < revealMs) {
+        effectiveNow = revealMs;
+        revealing = true;
+      }
+    }
+    const end = Date.parse(endsAt);
+    if (Number.isNaN(end)) return;
+    const ms = end - effectiveNow;
+    const value = el.querySelector('.auction-timer-value');
+    const label = el.querySelector('.auction-timer-label');
+    if (value) value.textContent = formatCountdown(ms);
+    if (label) label.textContent = revealing ? 'Get ready' : 'Time left';
+    el.classList.toggle('is-revealing', revealing);
+    el.classList.toggle('is-urgent', !revealing && ms <= 15000);
+  });
+}
+
+async function pauseAuctionTimer() {
+  try {
+    state.currentAuction = await apiFetch('/api/auction/timer/pause', { method: 'POST' });
+    renderSpotlight();
+    toast('Timer paused');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function resumeAuctionTimer() {
+  try {
+    state.currentAuction = await apiFetch('/api/auction/timer/resume', { method: 'POST' });
+    renderSpotlight();
+    toast('Timer resumed');
+  } catch (e) { toast(e.message, true); }
+}
+
 // ---------- Spotlight ----------
 // The hero of the operator screen too -- name and current bid dominate;
 // everything else (base price, leading team, stats) supports them.
@@ -192,9 +448,14 @@ function renderSpotlight() {
   const current = state.currentAuction;
   document.getElementById('bidPanelWrapper').style.display = current ? 'block' : 'none';
   if (!current) {
+    const hasBg = !!state.waitingBackgroundUrl;
     container.innerHTML = `
-      <div class="spotlight spotlight-waiting">
-        <div class="empty-state">No player currently up for auction. Pick one below.</div>
+      <div class="spotlight spotlight-waiting${hasBg ? ' has-waiting-bg' : ''}"${waitingSpotlightStyle()}>
+        <div class="empty-state">
+          <p class="eyebrow">Auction desk</p>
+          <h2>No player currently up for auction</h2>
+          <p class="muted">Pick one below to start the countdown.</p>
+        </div>
       </div>`;
     return;
   }
@@ -205,6 +466,7 @@ function renderSpotlight() {
     <div class="spotlight fifa-card ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
       ${ovrBadgeHtml(current)}
+      ${auctionTimerHtml(current)}
       <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
       <div class="info">
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
@@ -223,8 +485,13 @@ function renderSpotlight() {
         ${statBarsHtml(current)}
         ${current.stats ? `<p class="muted">${escapeHtml(current.stats)}</p>` : ''}
         <div class="player-actions">
-          <button class="btn btn-sm" type="button" onclick="markGoingOnce()">Going once</button>
-          <button class="btn btn-sm" type="button" onclick="markGoingTwice()">Going twice</button>
+          <button class="btn btn-sm" type="button" onclick="markGoingOnce()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Going once</button>
+          <button class="btn btn-sm" type="button" onclick="markGoingTwice()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Going twice</button>
+          ${(current.auction_ends_at || current.auction_timer_paused)
+            ? (current.auction_timer_paused
+              ? `<button class="btn btn-primary btn-sm" type="button" onclick="resumeAuctionTimer()">Resume timer</button>`
+              : `<button class="btn btn-sm" type="button" onclick="pauseAuctionTimer()">Pause timer</button>`)
+            : ''}
           <button class="btn btn-warn btn-sm" type="button" onclick="markUnsold(${current.id})">Mark unsold</button>
         </div>
       </div>

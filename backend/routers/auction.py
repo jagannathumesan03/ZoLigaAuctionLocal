@@ -1,11 +1,26 @@
+import asyncio
+from datetime import datetime, timezone, timedelta
+
 from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.database import db_cursor, row_to_dict, rows_to_list, enrich_player
+from backend.database import (
+    db_cursor,
+    row_to_dict,
+    rows_to_list,
+    enrich_player,
+    get_auction_timer_seconds,
+    is_auction_timer_enabled,
+)
 from backend.auth import require_admin, require_any
 from backend.sse import broadcaster
 
 router = APIRouter(prefix="/api/auction", tags=["auction"])
+
+# Keep in sync with static/js/pack-reveal.js total duration. The live timer
+# does not start counting until this reveal window ends, so the pack animation
+# never eats into auction time.
+PACK_REVEAL_SECONDS = 5
 
 
 class AssignBody(BaseModel):
@@ -27,6 +42,43 @@ class BidBody(BaseModel):
 class CallBody(BaseModel):
     player_id: int
     call: str  # "going_once" | "going_twice"
+
+
+def utc_now():
+    return datetime.now(timezone.utc)
+
+
+def to_iso(dt):
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def parse_iso(value):
+    if not value:
+        return None
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def auction_time_remaining_seconds(player, now=None):
+    """Seconds left on the auction clock, ignoring the pack-reveal window."""
+    now = now or utc_now()
+    if player.get("auction_timer_paused"):
+        remaining = player.get("auction_remaining_seconds")
+        return max(0, int(remaining or 0))
+
+    ends_at = parse_iso(player.get("auction_ends_at"))
+    if not ends_at:
+        return 0
+
+    reveal_until = parse_iso(player.get("auction_reveal_until"))
+    effective_now = now
+    if reveal_until and now < reveal_until:
+        effective_now = reveal_until
+    return max(0, int((ends_at - effective_now).total_seconds()))
 
 
 def full_player(cur, player_id):
@@ -59,10 +111,27 @@ def get_bid_history(cur, player_id):
 
 def clear_bid_state(cur, player_id):
     cur.execute(
-        "UPDATE players SET current_bid_amount=NULL, current_bid_team_id=NULL WHERE id=?",
+        """
+        UPDATE players
+        SET current_bid_amount=NULL,
+            current_bid_team_id=NULL,
+            auction_ends_at=NULL,
+            auction_timer_paused=0,
+            auction_remaining_seconds=NULL,
+            auction_reveal_until=NULL
+        WHERE id=?
+        """,
         (player_id,),
     )
     cur.execute("DELETE FROM bid_history WHERE player_id=?", (player_id,))
+
+
+def attach_auction_payload(cur, player):
+    if not player:
+        return None
+    player["history"] = get_bid_history(cur, player["id"])
+    player["auction_timer_paused"] = bool(player.get("auction_timer_paused"))
+    return player
 
 
 @router.get("/current")
@@ -72,9 +141,7 @@ def current_player(request: Request, _=Depends(require_any)):
         row = cur.fetchone()
         if not row:
             return None
-        player = full_player(cur, row["id"])
-        player["history"] = get_bid_history(cur, row["id"])
-        return player
+        return attach_auction_payload(cur, full_player(cur, row["id"]))
 
 
 @router.post("/set-current")
@@ -91,18 +158,116 @@ async def set_current(body: PlayerIdBody, request: Request, _=Depends(require_ad
         cur.execute("SELECT id FROM players WHERE status = 'auction'")
         for prev in cur.fetchall():
             clear_bid_state(cur, prev["id"])
-        cur.execute("UPDATE players SET status = 'waiting' WHERE status = 'auction'")
+        cur.execute(
+            """
+            UPDATE players
+            SET status = 'waiting',
+                auction_ends_at=NULL,
+                auction_timer_paused=0,
+                auction_remaining_seconds=NULL,
+                auction_reveal_until=NULL
+            WHERE status = 'auction'
+            """
+        )
+
+        timer_enabled = is_auction_timer_enabled(cur)
+        timer_seconds = get_auction_timer_seconds(cur) if timer_enabled else 0
+        now = utc_now()
+        reveal_until_dt = now + timedelta(seconds=PACK_REVEAL_SECONDS)
+        reveal_until = to_iso(reveal_until_dt)
+        # Timer only starts after the pack reveal window, so auction duration
+        # is preserved in full once the card flip finishes. When the timer is
+        # disabled in settings, leave auction_ends_at empty so nothing expires.
+        ends_at = (
+            to_iso(reveal_until_dt + timedelta(seconds=timer_seconds))
+            if timer_enabled
+            else None
+        )
 
         # fresh bid state for the newly selected player, starting at base price
         clear_bid_state(cur, body.player_id)
         cur.execute(
-            "UPDATE players SET status = 'auction', current_bid_amount = base_price WHERE id = ?",
-            (body.player_id,),
+            """
+            UPDATE players
+            SET status = 'auction',
+                current_bid_amount = base_price,
+                auction_ends_at = ?,
+                auction_timer_paused = 0,
+                auction_remaining_seconds = NULL,
+                auction_reveal_until = ?
+            WHERE id = ?
+            """,
+            (ends_at, reveal_until, body.player_id),
         )
-        result = full_player(cur, body.player_id)
-        result["history"] = get_bid_history(cur, body.player_id)
+        result = attach_auction_payload(cur, full_player(cur, body.player_id))
 
     await broadcaster.publish("current_player", result)
+    return result
+
+
+@router.post("/timer/pause")
+async def pause_timer(request: Request, _=Depends(require_admin)):
+    with db_cursor() as cur:
+        if not is_auction_timer_enabled(cur):
+            raise HTTPException(status_code=400, detail="Auction timer is disabled in settings")
+        cur.execute("SELECT * FROM players WHERE status = 'auction' LIMIT 1")
+        player = cur.fetchone()
+        if not player:
+            raise HTTPException(status_code=400, detail="No player is currently up for auction")
+        if player["auction_timer_paused"]:
+            return attach_auction_payload(cur, full_player(cur, player["id"]))
+        if not player["auction_ends_at"] and not player["auction_remaining_seconds"]:
+            raise HTTPException(status_code=400, detail="No active countdown to pause")
+
+        remaining = auction_time_remaining_seconds(dict(player))
+        cur.execute(
+            """
+            UPDATE players
+            SET auction_timer_paused = 1,
+                auction_remaining_seconds = ?,
+                auction_ends_at = NULL,
+                auction_reveal_until = NULL
+            WHERE id = ?
+            """,
+            (remaining, player["id"]),
+        )
+        result = attach_auction_payload(cur, full_player(cur, player["id"]))
+
+    await broadcaster.publish("timer_paused", result)
+    return result
+
+
+@router.post("/timer/resume")
+async def resume_timer(request: Request, _=Depends(require_admin)):
+    with db_cursor() as cur:
+        if not is_auction_timer_enabled(cur):
+            raise HTTPException(status_code=400, detail="Auction timer is disabled in settings")
+        cur.execute("SELECT * FROM players WHERE status = 'auction' LIMIT 1")
+        player = cur.fetchone()
+        if not player:
+            raise HTTPException(status_code=400, detail="No player is currently up for auction")
+        if not player["auction_timer_paused"]:
+            return attach_auction_payload(cur, full_player(cur, player["id"]))
+
+        remaining = player["auction_remaining_seconds"]
+        if remaining is None:
+            remaining = get_auction_timer_seconds(cur)
+        remaining = max(0, int(remaining))
+        ends_at = to_iso(utc_now() + timedelta(seconds=remaining))
+        cur.execute(
+            """
+            UPDATE players
+            SET auction_timer_paused = 0,
+                auction_remaining_seconds = NULL,
+                auction_ends_at = ?,
+                auction_reveal_until = NULL
+            WHERE id = ?
+            """,
+            (ends_at, player["id"]),
+        )
+        result = attach_auction_payload(cur, full_player(cur, player["id"]))
+
+    await broadcaster.publish("timer_resumed", result)
     return result
 
 
@@ -138,50 +303,65 @@ async def place_bid(body: BidBody, request: Request, _=Depends(require_admin)):
             "UPDATE players SET current_bid_amount=?, current_bid_team_id=? WHERE id=?",
             (body.amount, body.team_id, body.player_id),
         )
-        result = full_player(cur, body.player_id)
-        result["history"] = get_bid_history(cur, body.player_id)
+        result = attach_auction_payload(cur, full_player(cur, body.player_id))
 
     await broadcaster.publish("bid_updated", result)
     return result
 
 
+async def _publish_sale(player_result, team_result):
+    await broadcaster.publish("player_sold", player_result)
+    await broadcaster.publish("team_updated", team_result)
+
+
+async def _publish_unsold(player_result):
+    await broadcaster.publish("player_unsold", player_result)
+
+
+def _try_assign(cur, player_id, team_id, sold_price):
+    """Assign a player if purse/slots allow. Returns (player, team) or raises ValueError."""
+    cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
+    player = cur.fetchone()
+    if not player:
+        raise ValueError("Player not found")
+
+    cur.execute("SELECT * FROM teams WHERE id = ?", (team_id,))
+    team = cur.fetchone()
+    if not team:
+        raise ValueError("Team not found")
+
+    cur.execute("SELECT COUNT(*) as c FROM players WHERE team_id = ?", (team_id,))
+    filled = cur.fetchone()["c"]
+    if filled >= team["slots_max"]:
+        raise ValueError(f"{team['name']} already has {team['slots_max']} players")
+
+    if sold_price > team["purse_remaining"]:
+        raise ValueError(f"{team['name']} does not have enough purse remaining")
+
+    cur.execute(
+        "UPDATE players SET status='sold', sold_price=?, team_id=?, auction_ends_at=NULL WHERE id=?",
+        (sold_price, team_id, player_id),
+    )
+    cur.execute(
+        "UPDATE teams SET purse_remaining = purse_remaining - ? WHERE id = ?",
+        (sold_price, team_id),
+    )
+    clear_bid_state(cur, player_id)
+    player_result = full_player(cur, player_id)
+    cur.execute("SELECT * FROM teams WHERE id = ?", (team_id,))
+    team_result = row_to_dict(cur.fetchone())
+    return player_result, team_result
+
+
 @router.post("/assign")
 async def assign_player(body: AssignBody, request: Request, _=Depends(require_admin)):
     with db_cursor() as cur:
-        cur.execute("SELECT * FROM players WHERE id = ?", (body.player_id,))
-        player = cur.fetchone()
-        if not player:
-            raise HTTPException(status_code=404, detail="Player not found")
+        try:
+            player_result, team_result = _try_assign(cur, body.player_id, body.team_id, body.sold_price)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        cur.execute("SELECT * FROM teams WHERE id = ?", (body.team_id,))
-        team = cur.fetchone()
-        if not team:
-            raise HTTPException(status_code=404, detail="Team not found")
-
-        cur.execute("SELECT COUNT(*) as c FROM players WHERE team_id = ?", (body.team_id,))
-        filled = cur.fetchone()["c"]
-        if filled >= team["slots_max"]:
-            raise HTTPException(status_code=400, detail=f"{team['name']} already has {team['slots_max']} players")
-
-        if body.sold_price > team["purse_remaining"]:
-            raise HTTPException(status_code=400, detail=f"{team['name']} does not have enough purse remaining")
-
-        cur.execute(
-            "UPDATE players SET status='sold', sold_price=?, team_id=? WHERE id=?",
-            (body.sold_price, body.team_id, body.player_id),
-        )
-        cur.execute(
-            "UPDATE teams SET purse_remaining = purse_remaining - ? WHERE id = ?",
-            (body.sold_price, body.team_id),
-        )
-        clear_bid_state(cur, body.player_id)
-        player_result = full_player(cur, body.player_id)
-
-        cur.execute("SELECT * FROM teams WHERE id = ?", (body.team_id,))
-        team_result = row_to_dict(cur.fetchone())
-
-    await broadcaster.publish("player_sold", player_result)
-    await broadcaster.publish("team_updated", team_result)
+    await _publish_sale(player_result, team_result)
     return player_result
 
 
@@ -191,11 +371,14 @@ async def mark_unsold(body: PlayerIdBody, request: Request, _=Depends(require_ad
         cur.execute("SELECT * FROM players WHERE id = ?", (body.player_id,))
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Player not found")
-        cur.execute("UPDATE players SET status='unsold', team_id=NULL, sold_price=NULL WHERE id=?", (body.player_id,))
+        cur.execute(
+            "UPDATE players SET status='unsold', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
+            (body.player_id,),
+        )
         clear_bid_state(cur, body.player_id)
         result = full_player(cur, body.player_id)
 
-    await broadcaster.publish("player_unsold", result)
+    await _publish_unsold(result)
     return result
 
 
@@ -211,6 +394,17 @@ async def broadcast_call(body: CallBody, request: Request, _=Depends(require_adm
     """
     if body.call not in ("going_once", "going_twice"):
         raise HTTPException(status_code=400, detail="call must be 'going_once' or 'going_twice'")
+
+    with db_cursor() as cur:
+        cur.execute("SELECT id, status, current_bid_team_id FROM players WHERE id = ?", (body.player_id,))
+        player = cur.fetchone()
+        if not player:
+            raise HTTPException(status_code=404, detail="Player not found")
+        if player["status"] != "auction":
+            raise HTTPException(status_code=400, detail="This player is not currently up for auction")
+        if not player["current_bid_team_id"]:
+            raise HTTPException(status_code=400, detail="A team must be leading before calling going once / twice")
+
     await broadcaster.publish("auction_call", {"player_id": body.player_id, "call": body.call})
     return {"ok": True}
 
@@ -233,7 +427,10 @@ async def undo_assignment(body: PlayerIdBody, request: Request, _=Depends(requir
             cur.execute("SELECT * FROM teams WHERE id = ?", (player["team_id"],))
             refunded_team = row_to_dict(cur.fetchone())
 
-        cur.execute("UPDATE players SET status='waiting', team_id=NULL, sold_price=NULL WHERE id=?", (body.player_id,))
+        cur.execute(
+            "UPDATE players SET status='waiting', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
+            (body.player_id,),
+        )
         clear_bid_state(cur, body.player_id)
         result = full_player(cur, body.player_id)
 
@@ -241,3 +438,67 @@ async def undo_assignment(body: PlayerIdBody, request: Request, _=Depends(requir
     if refunded_team:
         await broadcaster.publish("team_updated", refunded_team)
     return result
+
+
+async def expire_auction_if_needed():
+    """If the live auction timer has elapsed, auto-sell to the leading bidder
+    (or mark unsold when nobody has bid). Safe to call repeatedly."""
+    expired = None
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, current_bid_team_id, current_bid_amount, base_price, auction_ends_at
+            FROM players
+            WHERE status = 'auction' AND auction_ends_at IS NOT NULL
+            LIMIT 1
+            """
+        )
+        row = cur.fetchone()
+        if not row:
+            return
+
+        ends_at = parse_iso(row["auction_ends_at"])
+        if not ends_at or ends_at > utc_now():
+            return
+
+        player_id = row["id"]
+        team_id = row["current_bid_team_id"]
+        sold_price = row["current_bid_amount"] or row["base_price"] or 0
+
+        if team_id:
+            try:
+                player_result, team_result = _try_assign(cur, player_id, team_id, sold_price)
+                expired = ("sold", player_result, team_result)
+            except ValueError:
+                cur.execute(
+                    "UPDATE players SET status='unsold', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
+                    (player_id,),
+                )
+                clear_bid_state(cur, player_id)
+                expired = ("unsold", full_player(cur, player_id), None)
+        else:
+            cur.execute(
+                "UPDATE players SET status='unsold', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
+                (player_id,),
+            )
+            clear_bid_state(cur, player_id)
+            expired = ("unsold", full_player(cur, player_id), None)
+
+    if not expired:
+        return
+    kind, player_result, team_result = expired
+    if kind == "sold":
+        await _publish_sale(player_result, team_result)
+    else:
+        await _publish_unsold(player_result)
+
+
+async def auction_timer_loop():
+    """Background watcher: finalize auctions whose countdown has hit zero."""
+    while True:
+        try:
+            await expire_auction_if_needed()
+        except Exception:
+            # Never let a transient DB/SSE blip kill the loop.
+            pass
+        await asyncio.sleep(0.5)

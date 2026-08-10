@@ -6,7 +6,14 @@ let state = {
   callState: null,      // { call: 'going_once' | 'going_twice', playerId, expiresAt }
   lastSpotlightBid: null,
   lastBidId: null,
+  waitingBackgroundUrl: '',
 };
+
+// Tracks the player currently shown as "up for auction" so we can fire the
+// FIFA pack-reveal animation only when a *new* player is selected (not on
+// first page load, and not on bid/timer refreshes for the same player).
+let lastAuctionPlayerId = null;
+let auctionBaselineReady = false;
 
 // ---------- Auth guard (admins may also view this page) ----------
 (async function guard() {
@@ -45,23 +52,37 @@ async function apiFetch(url) {
 }
 
 async function init() {
-  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
+  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction(), loadSettings()]);
+  lastAuctionPlayerId = state.currentAuction ? state.currentAuction.id : null;
+  auctionBaselineReady = true;
   renderAll();
   connectSSE();
   document.getElementById('playerSearch').addEventListener('input', renderPlayersList);
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
   setInterval(refreshRelativeTimes, 5000);
+  setInterval(tickAuctionTimer, 250);
 }
 
 async function loadPlayers() { state.players = await apiFetch('/api/players'); }
 async function loadTeams() { state.teams = await apiFetch('/api/teams'); }
 async function loadCurrentAuction() { state.currentAuction = await apiFetch('/api/auction/current'); }
+async function loadSettings() {
+  try {
+    const data = await apiFetch('/api/settings');
+    state.waitingBackgroundUrl = data.waiting_background_url || '';
+  } catch (e) {
+    state.waitingBackgroundUrl = '';
+  }
+}
+
+function waitingSpotlightStyle() {
+  const url = state.waitingBackgroundUrl;
+  if (!url) return '';
+  return ` style="--waiting-bg-image: url('${String(url).replace(/'/g, "\\'")}')"`;
+}
 
 function renderAll() {
   renderSpotlight();
-  renderBidActivity();
-  renderBidHistory();
-  renderNextUp();
   renderAuctionStatusStrip();
   renderTeamsList();
   renderTeamViewList();
@@ -80,9 +101,22 @@ function connectSSE() {
   const es = new EventSource('/api/events');
   const refresh = async () => {
     state.callState = null;
+    const previousAuctionId = lastAuctionPlayerId;
     await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
     detectAndAnnounceResults();
+    const nextAuctionId = state.currentAuction ? state.currentAuction.id : null;
+    const shouldReveal = auctionBaselineReady
+      && nextAuctionId
+      && nextAuctionId !== previousAuctionId
+      && typeof window.playPackReveal === 'function';
+    lastAuctionPlayerId = nextAuctionId;
     renderAll();
+    if (shouldReveal) {
+      window.playPackReveal(state.currentAuction, {
+        candidates: state.players,
+        onDone: () => renderSpotlight(),
+      });
+    }
   };
   es.addEventListener('current_player', refresh);
   es.addEventListener('bid_updated', refresh);
@@ -90,8 +124,17 @@ function connectSSE() {
   es.addEventListener('player_unsold', refresh);
   es.addEventListener('player_reset', refresh);
   es.addEventListener('team_updated', refresh);
+  es.addEventListener('timer_paused', refresh);
+  es.addEventListener('timer_resumed', refresh);
   es.addEventListener('auction_call', (e) => {
     try { setCallState(JSON.parse(e.data)); } catch (err) { /* ignore malformed payload */ }
+  });
+  es.addEventListener('settings_updated', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      state.waitingBackgroundUrl = data.waiting_background_url || '';
+      renderSpotlight();
+    } catch (err) { /* ignore */ }
   });
   es.onopen = () => setConnectionStatus(true);
   es.onerror = () => setConnectionStatus(false);
@@ -163,6 +206,106 @@ function callBannerHtml(call) {
   return `<div class="call-banner ${isTwice ? 'is-twice' : 'is-once'}">${isTwice ? 'Going twice' : 'Going once'}</div>`;
 }
 
+function remainingMs(endsAt) {
+  if (!endsAt) return null;
+  const end = Date.parse(endsAt);
+  if (Number.isNaN(end)) return null;
+  return end - Date.now();
+}
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function auctionClockMs(player) {
+  if (!player) return null;
+  if (player.auction_timer_paused) {
+    const remaining = player.auction_remaining_seconds;
+    if (remaining === null || remaining === undefined) return null;
+    return Math.max(0, Number(remaining) * 1000);
+  }
+  if (!player.auction_ends_at) return null;
+  const end = Date.parse(player.auction_ends_at);
+  if (Number.isNaN(end)) return null;
+  // Freeze the displayed auction time until the pack-reveal window ends.
+  let effectiveNow = Date.now();
+  if (player.auction_reveal_until) {
+    const revealUntil = Date.parse(player.auction_reveal_until);
+    if (!Number.isNaN(revealUntil) && effectiveNow < revealUntil) {
+      effectiveNow = revealUntil;
+    }
+  }
+  return end - effectiveNow;
+}
+
+function isAuctionRevealing(player) {
+  if (!player || player.auction_timer_paused || !player.auction_reveal_until) return false;
+  const revealUntil = Date.parse(player.auction_reveal_until);
+  return !Number.isNaN(revealUntil) && Date.now() < revealUntil;
+}
+
+function auctionTimerHtml(player) {
+  if (!player) return '';
+  const paused = !!player.auction_timer_paused;
+  const hasClock = paused || !!player.auction_ends_at;
+  if (!hasClock) return '';
+  const revealing = isAuctionRevealing(player);
+  const ms = auctionClockMs(player);
+  if (ms === null) return '';
+  const urgent = !paused && !revealing && ms <= 15000;
+  let attrs = '';
+  if (paused) {
+    attrs = ` data-paused="1" data-remaining-ms="${Math.round(ms)}"`;
+  } else {
+    attrs = ` data-ends-at="${escapeHtml(player.auction_ends_at || '')}"`;
+    if (player.auction_reveal_until) {
+      attrs += ` data-reveal-until="${escapeHtml(player.auction_reveal_until)}"`;
+    }
+  }
+  const label = paused ? 'Paused' : (revealing ? 'Get ready' : 'Time left');
+  return `
+    <div class="auction-timer${urgent ? ' is-urgent' : ''}${paused ? ' is-paused' : ''}${revealing ? ' is-revealing' : ''}"${attrs} aria-live="polite">
+      <span class="auction-timer-label">${label}</span>
+      <span class="auction-timer-value">${formatCountdown(ms)}</span>
+    </div>`;
+}
+
+function renderAuctionTimerDock() {
+  const mount = document.getElementById('auctionTimerDock');
+  if (!mount) return;
+  mount.innerHTML = auctionTimerHtml(state.currentAuction);
+}
+
+function tickAuctionTimer() {
+  document.querySelectorAll('.auction-timer').forEach(el => {
+    if (el.getAttribute('data-paused') === '1') return;
+    const endsAt = el.getAttribute('data-ends-at');
+    if (!endsAt) return;
+    const revealUntil = el.getAttribute('data-reveal-until');
+    let effectiveNow = Date.now();
+    let revealing = false;
+    if (revealUntil) {
+      const revealMs = Date.parse(revealUntil);
+      if (!Number.isNaN(revealMs) && effectiveNow < revealMs) {
+        effectiveNow = revealMs;
+        revealing = true;
+      }
+    }
+    const end = Date.parse(endsAt);
+    if (Number.isNaN(end)) return;
+    const ms = end - effectiveNow;
+    const value = el.querySelector('.auction-timer-value');
+    const label = el.querySelector('.auction-timer-label');
+    if (value) value.textContent = formatCountdown(ms);
+    if (label) label.textContent = revealing ? 'Get ready' : 'Time left';
+    el.classList.toggle('is-revealing', revealing);
+    el.classList.toggle('is-urgent', !revealing && ms <= 15000);
+  });
+}
+
 function resultStateHtml(result) {
   const p = result.player;
   if (result.type === 'sold') {
@@ -189,24 +332,40 @@ function resultStateHtml(result) {
 }
 
 // ---------- Hero: current player + current bid ----------
-// This is the dominant element on the page -- everything else supports it.
-// No "leading bid" card duplicates the current-bid number anymore; the
-// latest-bid-activity panel below covers "what just happened" instead.
+// Photo + player info on the left; live bid activity fills the empty right
+// side of the spotlight card.
+function spotlightBidPanelHtml() {
+  return `
+    <aside class="spotlight-bid-panel bid-activity-card dashboard-card" aria-labelledby="bidActivityTitle">
+      <div class="dashboard-heading"><h2 id="bidActivityTitle">Latest bid</h2><span class="activity-caption">Live</span></div>
+      <div id="bidActivity" class="bid-activity"></div>
+      <div class="bid-history-heading"><h3>Bid history</h3></div>
+      <div id="bidHistory" class="bid-history-log"></div>
+    </aside>`;
+}
+
+function fillSpotlightBidPanels() {
+  renderBidActivity();
+  renderBidHistory();
+}
+
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
   const current = state.currentAuction;
 
   if (!current) {
     const result = activeRecentResult();
+    const hasBg = !!state.waitingBackgroundUrl;
     container.innerHTML = result
       ? resultStateHtml(result)
       : `
-        <div class="spotlight spotlight-waiting">
+        <div class="spotlight spotlight-waiting${hasBg ? ' has-waiting-bg' : ''}"${waitingSpotlightStyle()}>
           <div class="empty-state">
             <p class="eyebrow">Auction desk</p>
             <h2>Waiting for the next player…</h2>
           </div>
         </div>`;
+    renderAuctionTimerDock();
     return;
   }
 
@@ -217,7 +376,7 @@ function renderSpotlight() {
   const isNewBid = state.lastSpotlightBid !== null && state.lastSpotlightBid !== bidAmount;
 
   container.innerHTML = `
-    <div class="spotlight fifa-card ${cardTierClass(current.card_tier)}">
+    <div class="spotlight fifa-card has-bid-panel ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
       ${ovrBadgeHtml(current)}
       <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
@@ -239,13 +398,17 @@ function renderSpotlight() {
         </div>
         ${statBarsHtml(current)}
       </div>
+      ${spotlightBidPanelHtml()}
     </div>`;
   state.lastSpotlightBid = bidAmount;
+  fillSpotlightBidPanels();
+  renderAuctionTimerDock();
 }
 
-// ---------- Latest bid activity (replaces the old duplicate "leading bid" card) ----------
+// ---------- Latest bid activity ----------
 function renderBidActivity() {
   const el = document.getElementById('bidActivity');
+  if (!el) return;
   const current = state.currentAuction;
   if (!current) {
     el.innerHTML = `<div class="bid-activity-empty">No active bidding yet.</div>`;
@@ -253,8 +416,13 @@ function renderBidActivity() {
     return;
   }
   const history = current.history || [];
+  const bidAmount = current.current_bid_amount || current.base_price;
   if (!history.length) {
-    el.innerHTML = `<div class="bid-activity-empty">Awaiting the first bid — opening at ${fmtMoney(current.base_price)}.</div>`;
+    el.innerHTML = `
+      <div class="bid-activity-amount">${fmtMoney(bidAmount)}</div>
+      <div class="bid-activity-meta">
+        <span>Current opening bid</span>
+      </div>`;
     state.lastBidId = null;
     return;
   }
@@ -275,16 +443,19 @@ function renderBidActivity() {
   state.lastBidId = latest.id;
 }
 
-// ---------- Bid history (compact live feed, newest first) ----------
+// ---------- Bid history (newest on top; older bids scroll below) ----------
 function renderBidHistory() {
   const historyContainer = document.getElementById('bidHistory');
+  if (!historyContainer) return;
   const current = state.currentAuction;
   if (!current) {
     historyContainer.innerHTML = `<div class="bid-history-empty">No active bidding yet.</div>`;
     return;
   }
-  const historyItems = (current.history || []).map(h => `
-    <div class="bid-history-item">
+  const history = current.history || [];
+  // Newest first so the current bid stays at the top of the scrollable log.
+  const historyItems = [...history].reverse().map((h, index) => `
+    <div class="bid-history-item${index === 0 ? ' is-current' : ''}">
       <span class="bid-history-team">
         <img src="${bidTeamLogo(h.team_id)}" alt="">
         ${escapeHtml(h.team_name || 'Unknown team')}
@@ -292,16 +463,16 @@ function renderBidHistory() {
       <span class="player-price">${fmtMoney(h.amount)}</span>
       <span class="bid-history-time" data-ts="${h.created_at || ''}">${relativeTime(h.created_at)}</span>
     </div>`).join('');
-  // Starting bid is real data (the player's base price), placed first in the
-  // DOM -- the log is flipped visually via column-reverse (see CSS), so this
-  // ends up at the bottom of the feed and the newest bid on top.
   const startingBidItem = `
-    <div class="bid-history-item bid-history-start">
+    <div class="bid-history-item bid-history-start${!history.length ? ' is-current' : ''}">
       <span class="bid-history-team">Starting bid</span>
       <span class="player-price">${fmtMoney(current.base_price)}</span>
       <span class="bid-history-time"></span>
     </div>`;
-  historyContainer.innerHTML = startingBidItem + historyItems;
+  historyContainer.innerHTML = historyItems + startingBidItem;
+  requestAnimationFrame(() => {
+    historyContainer.scrollTop = 0;
+  });
 }
 
 // Re-stamp only the relative-time labels on a slow interval, without
@@ -312,25 +483,6 @@ function refreshRelativeTimes() {
     const ts = el.getAttribute('data-ts');
     if (ts) el.textContent = relativeTime(ts);
   });
-}
-
-// ---------- Up next ----------
-function renderNextUp() {
-  const waitingPlayers = state.players.filter(player => player.status === 'waiting');
-  const nextPlayer = waitingPlayers[0];
-  const nextUp = document.getElementById('nextUp');
-  nextUp.innerHTML = nextPlayer
-    ? `
-      <div class="next-player fifa-card ${cardTierClass(nextPlayer.card_tier)}">
-        ${ovrBadgeHtml(nextPlayer)}
-        <img src="${nextPlayer.photo_url || placeholderImg()}" alt="${escapeHtml(nextPlayer.name)}">
-        <div>
-          <strong>${escapeHtml(nextPlayer.name)}</strong>
-          <span>${escapeHtml(nextPlayer.role || 'Player')}</span>
-          <small>Base price: ${fmtMoney(nextPlayer.base_price)}</small>
-        </div>
-      </div>`
-    : `<div class="next-player-empty">No waiting players in the pool.</div>`;
 }
 
 // ---------- Auction status (compact strip -- must never compete with the hero) ----------
@@ -457,11 +609,10 @@ function buildPrimaryTickerText() {
       : `↩ UNSOLD — ${result.player.name} returns to the pool`;
   }
 
-  const current = state.currentAuction;
-  if (!current) return 'Waiting for the next player…';
-  const bidAmount = current.current_bid_amount || current.base_price;
-  const leader = current.current_bid_team_name ? ` → ${current.current_bid_team_name}` : ' (opening bid)';
-  return `${current.name} → ${fmtMoney(bidAmount)}${leader}`;
+  // Live auction details already fill the spotlight — keep primary empty
+  // so the marquee isn't repeating the same player / bid / leader line.
+  if (state.currentAuction) return '';
+  return 'Waiting for the next player…';
 }
 
 function buildSecondaryTickerText() {
@@ -485,7 +636,11 @@ let tickerRenderVersion = 0;
 
 function renderTicker() {
   const primaryEl = document.getElementById('tickerPrimary');
-  if (primaryEl) primaryEl.textContent = buildPrimaryTickerText();
+  if (primaryEl) {
+    const primaryText = buildPrimaryTickerText();
+    primaryEl.textContent = primaryText;
+    primaryEl.hidden = !primaryText;
+  }
 
   const text = buildSecondaryTickerText();
   const track = document.getElementById('tickerTrack');
