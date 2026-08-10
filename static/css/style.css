@@ -947,7 +947,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .spotlight-bid-panel .dashboard-heading { flex: 0 0 auto; padding-bottom: 8px; }
 .spotlight-bid-panel .bid-history-log {
   flex: 1 1 auto;
-  max-height: 220px;
+  max-height: 300px;
   min-height: 0;
   margin-top: 0;
   overflow-y: auto;
@@ -971,7 +971,7 @@ h1, h2, h3 { letter-spacing: 0; }
 
 .viewer-page .bid-activity-card { margin: 0; }
 .viewer-page .bid-history-log { max-height: 150px; margin-top: 0; }
-.viewer-page .spotlight-bid-panel .bid-history-log { max-height: 220px; }
+.viewer-page .spotlight-bid-panel .bid-history-log { max-height: 300px; }
 .viewer-page .spotlight-bid-panel.bid-activity-card { box-shadow: none; }
 .viewer-page .bid-history-item { min-height: 35px; padding: 6px 8px; color: #dce6fc; font-size: 0.72rem; }
 .bid-history-team { display: inline-flex; align-items: center; min-width: 0; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
