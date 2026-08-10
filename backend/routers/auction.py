@@ -24,6 +24,11 @@ class BidBody(BaseModel):
     amount: int
 
 
+class CallBody(BaseModel):
+    player_id: int
+    call: str  # "going_once" | "going_twice"
+
+
 def full_player(cur, player_id):
     cur.execute(
         """
@@ -192,6 +197,22 @@ async def mark_unsold(body: PlayerIdBody, request: Request, _=Depends(require_ad
 
     await broadcaster.publish("player_unsold", result)
     return result
+
+
+@router.post("/call")
+async def broadcast_call(body: CallBody, request: Request, _=Depends(require_admin)):
+    """Auctioneer's "Going once" / "Going twice" announcement.
+
+    This is a live broadcast cue, not persisted auction state -- there's
+    nothing to store in the database, so it's just published over SSE for
+    the admin and viewer screens to flash briefly. The frontend clears it a
+    few seconds later, or immediately once a new bid/sale/reset event
+    arrives for this player (whichever comes first).
+    """
+    if body.call not in ("going_once", "going_twice"):
+        raise HTTPException(status_code=400, detail="call must be 'going_once' or 'going_twice'")
+    await broadcaster.publish("auction_call", {"player_id": body.player_id, "call": body.call})
+    return {"ok": True}
 
 
 @router.post("/undo")

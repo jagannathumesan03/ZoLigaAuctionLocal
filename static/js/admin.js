@@ -1,4 +1,7 @@
-let state = { players: [], teams: [], currentAuction: null, selectedBidTeamId: null, lastAuctionPlayerId: null };
+let state = {
+  players: [], teams: [], currentAuction: null, selectedBidTeamId: null, lastAuctionPlayerId: null,
+  callState: null, // { call: 'going_once' | 'going_twice', playerId, expiresAt } -- ephemeral, never persisted
+};
 
 // ---------- Auth guard ----------
 (async function guard() {
@@ -65,6 +68,13 @@ async function init() {
   document.getElementById('playerForm').addEventListener('submit', submitPlayerForm);
   document.getElementById('teamForm').addEventListener('submit', submitTeamForm);
   document.getElementById('assignForm').addEventListener('submit', submitAssignForm);
+
+  setInterval(() => {
+    document.querySelectorAll('[data-ts]').forEach(el => {
+      const ts = el.getAttribute('data-ts');
+      if (ts) el.textContent = relativeTime(ts);
+    });
+  }, 5000);
 }
 
 async function loadPlayers() {
@@ -97,6 +107,7 @@ let knownSoldPlayerIds = null;
 function connectSSE() {
   const es = new EventSource('/api/events');
   const refresh = async () => {
+    state.callState = null;
     await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
     detectAndCelebrateSales();
     renderAll();
@@ -107,6 +118,9 @@ function connectSSE() {
   es.addEventListener('player_unsold', refresh);
   es.addEventListener('player_reset', refresh);
   es.addEventListener('team_updated', refresh);
+  es.addEventListener('auction_call', (e) => {
+    try { setCallState(JSON.parse(e.data)); } catch (err) { /* ignore malformed payload */ }
+  });
   es.onopen = () => setConnectionStatus(true);
   es.onerror = () => setConnectionStatus(false);
 
@@ -134,40 +148,83 @@ function detectAndCelebrateSales() {
   knownSoldPlayerIds = currentSoldIds;
 }
 
+// ---------- Ephemeral auctioneer call ("Going once" / "Going twice") ----------
+// Broadcast-only, never persisted -- see backend/routers/auction.py's /call
+// endpoint. Cleared automatically after a few seconds, or immediately once a
+// new bid/sale/reset event arrives (handled in connectSSE's refresh()).
+function setCallState(data) {
+  state.callState = { call: data.call, playerId: data.player_id, expiresAt: Date.now() + 4000 };
+  renderSpotlight();
+  setTimeout(() => {
+    if (state.callState && state.callState.expiresAt <= Date.now()) {
+      state.callState = null;
+      renderSpotlight();
+    }
+  }, 4100);
+}
+function activeCallState() {
+  if (!state.callState) return null;
+  if (state.callState.expiresAt <= Date.now()) { state.callState = null; return null; }
+  return state.callState;
+}
+function callBannerHtml(call) {
+  const isTwice = call.call === 'going_twice';
+  return `<div class="call-banner ${isTwice ? 'is-twice' : 'is-once'}">${isTwice ? 'Going twice' : 'Going once'}</div>`;
+}
+async function announceCall(call) {
+  const current = state.currentAuction;
+  if (!current) return;
+  try {
+    await apiFetch('/api/auction/call', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: current.id, call }),
+    });
+  } catch (e) { toast(e.message, true); }
+}
+function markGoingOnce() { announceCall('going_once'); }
+function markGoingTwice() { announceCall('going_twice'); }
+
 // ---------- Spotlight ----------
+// The hero of the operator screen too -- name and current bid dominate;
+// everything else (base price, leading team, stats) supports them.
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
   const current = state.currentAuction;
   document.getElementById('bidPanelWrapper').style.display = current ? 'block' : 'none';
   if (!current) {
-    container.innerHTML = `<div class="empty-state">No player currently up for auction. Pick one below.</div>`;
+    container.innerHTML = `
+      <div class="spotlight spotlight-waiting">
+        <div class="empty-state">No player currently up for auction. Pick one below.</div>
+      </div>`;
     return;
   }
   const bidAmount = current.current_bid_amount || current.base_price;
-  const previousBid = current.history && current.history.length > 1
-    ? current.history[current.history.length - 2].amount
-    : current.base_price;
-  const nextBid = bidAmount + tierIncrement(bidAmount);
-  const bidCount = current.history ? current.history.length : 0;
+  const hasBids = !!current.current_bid_team_id;
+  const call = activeCallState();
   container.innerHTML = `
     <div class="spotlight fifa-card ${cardTierClass(current.card_tier)}">
+      ${call ? callBannerHtml(call) : ''}
       ${ovrBadgeHtml(current)}
-      <img src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
       <div class="info">
-        <span class="badge badge-auction">Up for auction</span>
+        <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
-        <div class="muted spotlight-base-price">Base price: ${fmtMoney(current.base_price)}</div>
-        <div class="bid-amount-display" aria-live="polite">${fmtMoney(bidAmount)}</div>
-        <div class="bid-leading">${current.current_bid_team_name ? `Leading team: <b>${escapeHtml(current.current_bid_team_name)}</b>` : 'No bids yet — starting at base price'}</div>
-        <div class="auction-facts">
-          <div><span>Previous bid</span><strong>${fmtMoney(previousBid)}</strong></div>
-          <div><span>Next minimum</span><strong>${fmtMoney(nextBid)}</strong></div>
-          <div><span>Bid activity</span><strong>${bidCount} ${bidCount === 1 ? 'bid' : 'bids'}</strong></div>
+        <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
+        <div class="current-bid-block">
+          <span class="eyebrow">Current bid</span>
+          <div class="bid-amount-display" aria-live="polite">${fmtMoney(bidAmount)}</div>
         </div>
-        ${statGridHtml(current)}
+        <div class="leading-team-row${hasBids ? ' has-leader' : ''}">
+          ${hasBids
+            ? `<span class="leading-team-name">${escapeHtml(current.current_bid_team_name || 'Unknown team')}</span><span class="leading-chip">Leading</span>`
+            : `<span class="muted">No bids yet — starting at base price</span>`}
+        </div>
+        ${statBarsHtml(current)}
         ${current.stats ? `<p class="muted">${escapeHtml(current.stats)}</p>` : ''}
         <div class="player-actions">
+          <button class="btn btn-sm" type="button" onclick="markGoingOnce()">Going once</button>
+          <button class="btn btn-sm" type="button" onclick="markGoingTwice()">Going twice</button>
           <button class="btn btn-warn btn-sm" type="button" onclick="markUnsold(${current.id})">Mark unsold</button>
         </div>
       </div>
@@ -213,13 +270,19 @@ function renderBidPanel() {
     </button>
   `).join('');
 
-  const historyHtml = current.history && current.history.length
-    ? current.history.map(h => `
+  const bidHistoryItems = (current.history || []).map(h => `
         <div class="bid-history-item">
           <span>${escapeHtml(h.team_name || 'Unknown team')}</span>
           <span class="player-price">${fmtMoney(h.amount)}</span>
-        </div>`).join('')
-    : `<div class="bid-history-empty">No bids placed yet for this player.</div>`;
+          <span class="bid-history-time" data-ts="${h.created_at || ''}">${relativeTime(h.created_at)}</span>
+        </div>`).join('');
+  const startingBidItem = `
+        <div class="bid-history-item bid-history-start">
+          <span>Starting bid</span>
+          <span class="player-price">${fmtMoney(current.base_price)}</span>
+          <span class="bid-history-time"></span>
+        </div>`;
+  const historyHtml = startingBidItem + bidHistoryItems;
 
   wrapper.innerHTML = `
     <div class="bid-summary"><span>Current bid</span><strong>${fmtMoney(bidAmount)}</strong><span>Minimum next bid: ${fmtMoney(bidAmount + inc)}</span></div>
@@ -614,6 +677,34 @@ function statGridHtml(p) {
   return `<div class="stat-grid">${stats.map(([label, val]) =>
     `<div class="stat-item"><span class="stat-label">${label}</span><span class="stat-value">${val ?? '-'}</span></div>`
   ).join('')}</div>`;
+}
+// Compact bar-meter version used in the spotlight hero, where the six
+// sub-stats need to be scannable without competing with the name/bid.
+function statBarsHtml(p) {
+  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
+  return `<div class="stat-bars">${stats.map(([label, val]) => {
+    const pct = Math.max(0, Math.min(100, val ?? 0));
+    return `
+      <div class="stat-bar-row">
+        <span class="stat-bar-label">${label}</span>
+        <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
+        <span class="stat-bar-value">${val ?? '-'}</span>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function relativeTime(ts) {
+  if (!ts) return '';
+  const iso = String(ts).includes('T') ? ts : String(ts).replace(' ', 'T') + 'Z';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (diffSec < 5) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  return `${diffHr}h ago`;
 }
 
 function setConnectionStatus(isConnected) {
