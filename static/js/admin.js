@@ -602,7 +602,7 @@ function renderBidPanel() {
         <div class="auction-team-tile-main">
           <strong class="auction-team-tile-name">${escapeHtml(t.name)}</strong>
           <span class="auction-team-tile-meta">${t.squad.length}/${t.slots_max} slots · ${fmtMoney(t.purse_remaining)}</span>
-          <span class="purse-bar"><span class="purse-bar-fill" style="width:${pct}%"></span></span>
+          <span class="purse-bar"><span class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></span></span>
           <span class="auction-team-tile-action">${disabled ? reason : fmtMoney(draftAmount)}</span>
         </div>
       </button>`;
@@ -924,7 +924,7 @@ function renderTeamsList() {
           <img class="team-logo" src="${t.logo_url || placeholderImg()}" alt="">
           <div>
             <div class="team-name">${escapeHtml(t.name)}</div>
-            <div class="team-purse">${t.squad.length}/${t.slots_max} players</div>
+            <div class="team-purse">${t.squad.length}/${t.slots_max} players${t.has_owner_password ? ' · login set' : ''}</div>
           </div>
           <div style="margin-left:auto; display:flex; gap:6px;">
             <button class="btn btn-sm" onclick="openTeamModal(${t.id})">Edit</button>
@@ -932,7 +932,7 @@ function renderTeamsList() {
           </div>
         </div>
         <div class="team-purse">Purse: ${fmtMoney(t.purse_remaining)} / ${fmtMoney(t.purse_total)}</div>
-        <div class="purse-bar"><div class="purse-bar-fill" style="width:${pct}%"></div></div>
+        <div class="purse-bar"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         <div class="squad-list">${squadHtml}${emptyHtml}</div>
       </div>`;
   }).join('');
@@ -943,14 +943,19 @@ function openTeamModal(id) {
   form.reset();
   document.getElementById('teamId').value = id || '';
   document.getElementById('teamModalTitle').textContent = id ? 'Edit Team' : 'Add Team';
+  const hint = document.getElementById('teamPasswordHint');
   if (id) {
     const t = state.teams.find(x => x.id === id);
     document.getElementById('teamName').value = t.name;
     document.getElementById('teamPurse').value = t.purse_total;
     document.getElementById('teamSlots').value = t.slots_max;
+    if (hint) hint.textContent = t.has_owner_password
+      ? 'A team password is set. Enter a new one only if you want to change it.'
+      : 'No team password yet — set one so the owner can open their manager desk.';
   } else {
     document.getElementById('teamPurse').value = 10000000;
     document.getElementById('teamSlots').value = 7;
+    if (hint) hint.textContent = 'Owners use this password on the viewer login to open their manager desk.';
   }
   document.getElementById('teamModalOverlay').style.display = 'flex';
 }
@@ -963,6 +968,8 @@ async function submitTeamForm(e) {
   fd.append('name', document.getElementById('teamName').value);
   fd.append('purse_total', document.getElementById('teamPurse').value);
   fd.append('slots_max', document.getElementById('teamSlots').value);
+  const ownerPassword = document.getElementById('teamOwnerPassword').value;
+  if (ownerPassword) fd.append('owner_password', ownerPassword);
   const logo = document.getElementById('teamLogo').files[0];
   if (logo) fd.append('logo', logo);
 
@@ -1040,6 +1047,13 @@ function statusBadge(status) {
 function fmtMoney(v) {
   if (v === null || v === undefined) return '-';
   return '₹' + Number(v).toLocaleString('en-IN');
+}
+// Same green-to-red purse-health ramp the viewer page uses, so a team's
+// purse bar reads the same way in both places instead of staying a flat,
+// unchanging color as the purse drains.
+function purseColorFor(percentageRemaining) {
+  const hue = Math.round(Math.max(0, Math.min(percentageRemaining, 100)) * 1.35);
+  return `hsl(${hue} 78% 52%)`;
 }
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

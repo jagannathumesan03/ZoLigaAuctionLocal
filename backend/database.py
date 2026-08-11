@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS teams (
     logo_url TEXT DEFAULT '',
     purse_total INTEGER NOT NULL DEFAULT 0,
     purse_remaining INTEGER NOT NULL DEFAULT 0,
-    slots_max INTEGER NOT NULL DEFAULT 7
+    slots_max INTEGER NOT NULL DEFAULT 7,
+    owner_password TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS players (
@@ -99,6 +100,11 @@ def _migrate(cur):
     for stat in CARD_STAT_FIELDS:
         if stat not in cols:
             cur.execute(f"ALTER TABLE players ADD COLUMN {stat} INTEGER NOT NULL DEFAULT 50")
+
+    cur.execute("PRAGMA table_info(teams)")
+    team_cols = {row[1] for row in cur.fetchall()}
+    if "owner_password" not in team_cols:
+        cur.execute("ALTER TABLE teams ADD COLUMN owner_password TEXT DEFAULT ''")
 
     cur.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",

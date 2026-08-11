@@ -38,7 +38,19 @@ async def on_startup():
 
 @app.get("/api/events")
 async def sse_endpoint(request: Request):
-    return StreamingResponse(event_stream(request), media_type="text/event-stream")
+    # See the Catalyst variant's version of this endpoint for why these
+    # headers matter: some hosts front the app with a buffering proxy that
+    # holds back SSE bytes without them, making updates look "stuck" until
+    # a manual refresh.
+    return StreamingResponse(
+        event_stream(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/")

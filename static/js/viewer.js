@@ -6,6 +6,7 @@ let state = {
   callState: null,      // { call: 'going_once' | 'going_twice', playerId, expiresAt }
   lastSpotlightBid: null,
   waitingBackgroundUrl: '',
+  auth: { role: 'viewer', team_id: null, username: '' },
 };
 
 // Tracks the player currently shown as "up for auction" so we can fire the
@@ -19,7 +20,8 @@ let auctionBaselineReady = false;
   try {
     const res = await fetch('/api/auth/me');
     if (!res.ok) throw new Error();
-    await res.json();
+    state.auth = await res.json();
+    if (state.auth.role === 'team') setupManagerTab();
     init();
   } catch (e) {
     window.location.href = '/login';
@@ -28,6 +30,13 @@ let auctionBaselineReady = false;
 
 function logout() {
   fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = '/login');
+}
+
+function setupManagerTab() {
+  const tab = document.querySelector('.tab[data-tab="manager"]');
+  const panel = document.getElementById('tab-manager');
+  if (tab) tab.hidden = false;
+  if (panel) panel.hidden = false;
 }
 
 // ---------- Tabs ----------
@@ -83,6 +92,7 @@ function waitingSpotlightStyle() {
 function renderAll() {
   renderSpotlight();
   renderAuctionStatusStrip();
+  renderManagerDesk();
   renderTeamsList();
   renderTeamViewList();
   renderPlayersList();
@@ -96,9 +106,21 @@ function renderAll() {
 // same robustness pattern the confetti celebration already relied on.
 let knownPlayerStatus = null;
 
+// SSE events can arrive in quick bursts (a bid landing right as a new player
+// goes up, a reconnect replaying state, etc.). Each refresh does its own
+// async fetch + mutates shared `state`/`lastAuctionPlayerId`, so letting two
+// runs overlap lets the slower one finish "after" the faster one, re-read
+// state the faster run already updated, and wrongly conclude the auction
+// player changed again -- which retriggers/restarts the pack-reveal
+// animation mid-spin. Serializing runs (and coalescing anything that arrives
+// while one is in flight into a single follow-up pass) makes each refresh
+// see a consistent, already-settled `lastAuctionPlayerId` before it starts.
+let refreshInFlight = false;
+let refreshPending = false;
+
 function connectSSE() {
   const es = new EventSource('/api/events');
-  const refresh = async () => {
+  const runRefresh = async () => {
     state.callState = null;
     const previousAuctionId = lastAuctionPlayerId;
     await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
@@ -115,6 +137,19 @@ function connectSSE() {
         candidates: state.players,
         onDone: () => renderSpotlight(),
       });
+    }
+  };
+  const refresh = async () => {
+    if (refreshInFlight) { refreshPending = true; return; }
+    refreshInFlight = true;
+    try {
+      await runRefresh();
+    } finally {
+      refreshInFlight = false;
+      if (refreshPending) {
+        refreshPending = false;
+        refresh();
+      }
     }
   };
   es.addEventListener('current_player', refresh);
@@ -458,6 +493,15 @@ function renderAuctionStatusStrip() {
 }
 
 // ---------- Team purses (compact live-sports tiles, not an admin table) ----------
+// Same green-to-red hue ramp the full Team view tab uses (see
+// renderTeamViewList below), so a team's purse bar reads the same way
+// everywhere it appears -- this compact tile just wasn't wired up to it and
+// stayed a flat, unchanging color as the purse drained.
+function purseColorFor(percentageRemaining) {
+  const hue = Math.round(Math.max(0, Math.min(percentageRemaining, 100)) * 1.35);
+  return `hsl(${hue} 78% 52%)`;
+}
+
 function renderTeamsList() {
   const container = document.getElementById('teamsList');
   if (!state.teams.length) { container.innerHTML = `<div class="empty">No teams yet.</div>`; return; }
@@ -475,12 +519,142 @@ function renderTeamsList() {
           </div>
           <div class="team-tile-purse-row">
             <span class="team-tile-purse">${fmtMoney(t.purse_remaining)}</span>
-            <span class="team-tile-slots">${t.squad.length}/${t.slots_max}</span>
+            <span class="team-tile-slots">${(t.slots_filled != null ? t.slots_filled : t.squad.length)}/${t.slots_max}</span>
           </div>
-          <div class="purse-bar" aria-hidden="true"><div class="purse-bar-fill" style="width:${pct}%"></div></div>
+          <div class="purse-bar" aria-hidden="true"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         </div>
       </div>`;
   }).join('');
+}
+
+function nextBidIncrement(amount) {
+  if (amount < 100000) return 10000;
+  if (amount < 500000) return 25000;
+  if (amount < 1000000) return 50000;
+  if (amount < 5000000) return 100000;
+  return 250000;
+}
+
+function ownTeam() {
+  if (state.auth.role !== 'team' || !state.auth.team_id) return null;
+  return state.teams.find(team => team.id === state.auth.team_id) || null;
+}
+
+function renderManagerDesk() {
+  const desk = document.getElementById('managerDesk');
+  const brand = document.getElementById('viewerBrand');
+  const me = ownTeam();
+  if (!desk) return;
+  if (!me) {
+    desk.innerHTML = '';
+    if (brand) brand.textContent = 'Live Auction';
+    return;
+  }
+  if (brand) brand.textContent = `${me.name} · Live Auction`;
+
+  const squad = Array.isArray(me.squad) ? me.squad : [];
+  const slotsLeft = Math.max(0, me.slots_max - squad.length);
+  const spent = Math.max(0, (me.purse_total || 0) - (me.purse_remaining || 0));
+  const pct = me.purse_total ? Math.round((me.purse_remaining / me.purse_total) * 100) : 0;
+  const current = state.currentAuction;
+  const currentAmount = current ? (current.current_bid_amount || current.base_price) : 0;
+  const nextAmount = current ? currentAmount + nextBidIncrement(currentAmount) : 0;
+  const afterBuy = me.purse_remaining - nextAmount;
+  const slotsAfter = slotsLeft - 1;
+  const reserve = Math.max(0, slotsAfter) * (current ? current.base_price : 0);
+  const affordable = current && slotsLeft > 0 && me.purse_remaining >= nextAmount;
+  const counts = squadPositionCounts(squad);
+  const gaps = POS_ORDER.filter(pos => counts[pos] === 0);
+  const currentPos = current ? roleAbbreviation(current.role) : '';
+  const fillsGap = current && gaps.includes(currentPos);
+  const avgPaid = squad.length
+    ? Math.round(squad.reduce((sum, p) => sum + (p.sold_price || 0), 0) / squad.length)
+    : 0;
+  const strength = squad.length
+    ? Math.round(squad.reduce((sum, p) => sum + (p.overall || 0), 0) / squad.length)
+    : 0;
+  const kit = teamKitColor(me);
+
+  const signings = squad.length
+    ? `<div class="manager-signings-wrap"><table class="manager-signings-table">
+        <thead><tr><th></th><th>Player</th><th>Pos</th><th>Skills</th><th>Rtg</th><th class="paid">Paid</th></tr></thead>
+        <tbody>${squad.map(p => {
+          const pos = roleAbbreviation(p.role);
+          const skills = [p.stats, ['PAC', p.pace, 'SHO', p.shooting, 'PAS', p.passing, 'DRI', p.dribbling, 'DEF', p.defending, 'PHY', p.physical]
+            .reduce((out, _, i, arr) => (i % 2 === 0 ? out.concat(`${arr[i]} ${arr[i + 1] ?? '-'}`) : out), []).join(' · ')]
+            .filter(Boolean).join(' · ');
+          return `
+            <tr>
+              <td><img src="${p.photo_url || placeholderImg()}" alt="" style="border-color:${kit}"></td>
+              <td>${escapeHtml(p.name)}</td>
+              <td><span class="manager-pos-chip" style="background:${POS_COLOR[pos] || '#6b7280'}">${escapeHtml(pos)}</span></td>
+              <td class="muted">${escapeHtml(skills || '—')}</td>
+              <td class="num">${p.overall != null ? p.overall : '—'}</td>
+              <td class="paid">${fmtMoney(p.sold_price)}</td>
+            </tr>`;
+        }).join('')}</tbody>
+      </table></div>`
+    : `<div class="empty">Nothing bought yet — your full purse is intact.</div>`;
+
+  desk.innerHTML = `
+    <div class="section-heading compact">
+      <div><p class="eyebrow">Manager desk</p><h2>${escapeHtml(me.name)}</h2></div>
+      <span class="connection-state"><span></span> Your squad only</span>
+    </div>
+    <div class="manager-grid">
+      <article class="dashboard-card manager-on-block">
+        <div class="dashboard-heading"><h2>On the block</h2></div>
+        ${current ? `
+          <div class="manager-block-row">
+            <img src="${current.photo_url || placeholderImg()}" alt="">
+            <div>
+              <strong>${escapeHtml(current.name)}</strong>
+              <span>${escapeHtml(current.role || 'Player')}${current.overall != null ? ` · ${current.overall} OVR` : ''}</span>
+              <div class="muted">Live bid ${fmtMoney(currentAmount)}</div>
+              ${current.current_bid_team_name ? `<div class="muted">Led by ${escapeHtml(current.current_bid_team_name)}</div>` : ''}
+              ${fillsGap ? `<span class="leading-chip">Fills your ${currentPos} gap</span>` : ''}
+            </div>
+          </div>` : `<div class="empty">Nothing up for bid right now.</div>`}
+      </article>
+      <article class="dashboard-card">
+        <div class="dashboard-heading"><h2>If you win at ${current ? fmtMoney(nextAmount) : '—'}</h2></div>
+        <div class="manager-kpis">
+          <div><span>Purse after</span><strong>${current ? fmtMoney(Math.max(0, afterBuy)) : '—'}</strong></div>
+          <div><span>Slots after</span><strong>${current ? Math.max(0, slotsAfter) : slotsLeft}</strong></div>
+        </div>
+        <p class="muted">${!current
+          ? 'Waiting for the next player.'
+          : !affordable
+            ? (slotsLeft === 0 ? 'Squad complete — you are out of this lot.' : 'This raise is over your remaining purse.')
+            : afterBuy < reserve
+              ? 'Winning here leaves little reserve for remaining slots.'
+              : 'Comfortable — you can still cover remaining slots.'}</p>
+      </article>
+    </div>
+    <div class="auction-status-strip manager-status">
+      <div class="status-chip"><strong>${fmtMoney(me.purse_remaining)}</strong><span>Purse left</span></div>
+      <div class="status-chip"><strong>${squad.length}/${me.slots_max}</strong><span>Players taken</span></div>
+      <div class="status-chip"><strong>${strength || '—'}</strong><span>Squad rating</span></div>
+      <div class="status-chip"><strong>${gaps.length ? gaps.join(' ') : 'None'}</strong><span>Position gaps</span></div>
+    </div>
+    <div class="manager-squad">
+      <article class="dashboard-card manager-pitch-card">
+        <div class="dashboard-heading">
+          <h2>Match-day five</h2>
+          <span class="activity-caption">${squad.length}/${me.slots_max}</span>
+        </div>
+        ${renderPitch(squad, kit)}
+      </article>
+      <article class="dashboard-card manager-signings">
+        <div class="dashboard-heading">
+          <h2>Your signings</h2>
+          <span class="activity-caption">Avg buy ${fmtMoney(avgPaid)} · ${pct}% purse left</span>
+        </div>
+        <div class="purse-bar" aria-hidden="true"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
+        ${signings}
+      </article>
+    </div>
+  `;
 }
 
 function renderTeamViewList() {
@@ -495,8 +669,7 @@ function renderTeamViewList() {
     const percentageRemaining = team.purse_total
       ? Math.round((team.purse_remaining / team.purse_total) * 100)
       : 0;
-    const purseHue = Math.round(Math.max(0, Math.min(percentageRemaining, 100)) * 1.35);
-    const purseColor = `hsl(${purseHue} 78% 52%)`;
+    const purseColor = purseColorFor(percentageRemaining);
     const selectedPlayers = squad.map(player => `
       <div class="team-view-player">
         <img class="team-view-player-photo" src="${player.photo_url || placeholderImg()}" alt="${escapeHtml(player.name)}">
@@ -675,16 +848,110 @@ function bidTeamLogo(teamId) {
   return team && team.logo_url ? team.logo_url : placeholderImg();
 }
 
+const POS_ORDER = ['GK', 'DEF', 'MID', 'FW'];
+const POS_COLOR = { GK: '#C08A1E', DEF: '#3C82B8', MID: '#12906A', FW: '#D4504A' };
+const TEAM_KIT = ['#D4504A', '#3C82B8', '#12906A', '#C08A1E', '#7D5AA6', '#1F8D96'];
+const MATCHDAY_FIVE = [
+  { pos: 'GK', x: 50, y: 87 },
+  { pos: 'DEF', x: 24, y: 66 }, { pos: 'DEF', x: 76, y: 66 },
+  { pos: 'MID', x: 50, y: 45 },
+  { pos: 'FW', x: 50, y: 20 },
+];
+
 function roleAbbreviation(role) {
   const normalizedRole = String(role || '').trim().toLowerCase();
   const abbreviations = {
-    forward: 'FW',
-    midfielder: 'MID',
-    middle: 'MID',
-    defender: 'DEF',
-    goalkeeper: 'GK',
+    forward: 'FW', fwd: 'FW', fw: 'FW', st: 'FW', striker: 'FW', attacker: 'FW',
+    midfielder: 'MID', middle: 'MID', mid: 'MID', cm: 'MID',
+    defender: 'DEF', defence: 'DEF', defense: 'DEF', cb: 'DEF',
+    goalkeeper: 'GK', keeper: 'GK', gk: 'GK',
   };
-  return abbreviations[normalizedRole] || (normalizedRole ? normalizedRole.slice(0, 3).toUpperCase() : '-');
+  if (abbreviations[normalizedRole]) return abbreviations[normalizedRole];
+  const short = normalizedRole ? normalizedRole.slice(0, 3).toUpperCase() : '-';
+  return short === 'FWD' ? 'FW' : short;
+}
+
+function teamKitColor(team) {
+  const index = Math.max(0, Number(team && team.id) - 1);
+  return TEAM_KIT[index % TEAM_KIT.length];
+}
+
+function lastName(name) {
+  const parts = String(name || '').trim().split(/\s+/);
+  return parts[parts.length - 1] || name || '';
+}
+
+function squadPositionCounts(squad) {
+  const counts = { FW: 0, MID: 0, DEF: 0, GK: 0 };
+  squad.forEach(p => {
+    const key = roleAbbreviation(p.role);
+    if (counts[key] !== undefined) counts[key] += 1;
+  });
+  return counts;
+}
+
+function buildMatchdayFive(squad) {
+  const pool = Array.isArray(squad) ? [...squad] : [];
+  const taken = new Set();
+  const filled = MATCHDAY_FIVE.map(slot => {
+    const pick = pool.find(p => roleAbbreviation(p.role) === slot.pos && !taken.has(p.id));
+    if (pick) taken.add(pick.id);
+    return { ...slot, player: pick || null, outOfPos: false };
+  });
+  filled.forEach(slot => {
+    if (!slot.player) {
+      const alt = pool.find(p => !taken.has(p.id));
+      if (alt) {
+        taken.add(alt.id);
+        slot.player = alt;
+        slot.outOfPos = true;
+      }
+    }
+  });
+  return { filled, bench: pool.filter(p => !taken.has(p.id)) };
+}
+
+function renderPitch(squad, kitColor) {
+  const { filled, bench } = buildMatchdayFive(squad);
+  const spots = filled.map(slot => {
+    if (slot.player) {
+      const pos = roleAbbreviation(slot.player.role);
+      const meta = slot.outOfPos
+        ? `${escapeHtml(pos)} cover`
+        : escapeHtml(fmtMoney(slot.player.sold_price));
+      return `
+        <div class="manager-spot" style="left:${slot.x}%;top:${slot.y}%">
+          <img src="${slot.player.photo_url || placeholderImg()}" alt="" style="border-color:${kitColor}">
+          <div class="manager-spot-name">${escapeHtml(lastName(slot.player.name))}</div>
+          <div class="manager-spot-meta${slot.outOfPos ? ' is-cover' : ''}">${meta}</div>
+        </div>`;
+    }
+    return `
+      <div class="manager-spot" style="left:${slot.x}%;top:${slot.y}%">
+        <div class="manager-spot-vacant">${escapeHtml(slot.pos)}</div>
+        <div class="manager-spot-name">Vacant</div>
+      </div>`;
+  }).join('');
+  const benchChips = bench.length
+    ? bench.map(p => `
+        <span class="manager-bench-chip">
+          <span class="dot" style="background:${POS_COLOR[roleAbbreviation(p.role)] || '#8fa1b3'}"></span>
+          ${escapeHtml(p.name)} · ${fmtMoney(p.sold_price)}
+        </span>`).join('')
+    : `<span class="muted">No rotation options yet.</span>`;
+  return `
+    <div class="manager-pitch" aria-label="Match-day five">
+      <div class="manager-pitch-line touch"></div>
+      <div class="manager-pitch-line halfway"></div>
+      <div class="manager-pitch-line circle"></div>
+      <div class="manager-pitch-line box-top"></div>
+      <div class="manager-pitch-line box-bottom"></div>
+      ${spots}
+    </div>
+    <div class="manager-bench">
+      <div class="manager-bench-label">Bench · ${bench.length}</div>
+      <div class="manager-bench-row">${benchChips}</div>
+    </div>`;
 }
 
 // ---------- Helpers ----------
