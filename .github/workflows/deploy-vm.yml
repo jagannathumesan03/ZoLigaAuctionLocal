@@ -21,10 +21,11 @@ jobs:
             git fetch origin
             git checkout main
             git reset --hard origin/main
-            # Keep the venv outside the git tree so resets never wipe it
             if [ ! -x /opt/zoliga/venv/bin/uvicorn ]; then
               python3 -m venv /opt/zoliga/venv
             fi
             /opt/zoliga/venv/bin/pip install -r requirements.txt
             sudo systemctl restart zoliga-auction
+            sleep 2
             sudo systemctl is-active zoliga-auction
+            curl -sf -o /dev/null http://127.0.0.1:8000/login
