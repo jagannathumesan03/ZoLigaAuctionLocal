@@ -149,6 +149,42 @@ def is_auction_timer_enabled(cur):
     return str(raw).lower() not in ("0", "false", "off", "no", "")
 
 
+def remaining_player_base_prices(cur):
+    """Base prices of players still available to buy, cheapest first.
+
+    The player currently up for auction is excluded — that purchase is the
+    spend being decided. Waiting and unsold players can still fill later slots.
+    """
+    cur.execute(
+        """
+        SELECT COALESCE(base_price, 0)
+        FROM players
+        WHERE status IN ('waiting', 'unsold')
+        ORDER BY base_price ASC
+        """
+    )
+    return [int(row[0] or 0) for row in cur.fetchall()]
+
+
+def squad_completion_reserve(slots_left, remaining_prices):
+    """Points that must be kept to fill the *other* empty slots at the
+    cheapest remaining base prices. 2 slots left and 16 players left → keep
+    the single cheapest remaining base (not a fixed league minimum)."""
+    need = max(0, int(slots_left or 0) - 1)
+    if need <= 0:
+        return 0
+    prices = list(remaining_prices or [])
+    return sum(int(p or 0) for p in prices[:need])
+
+
+def max_spendable(purse_remaining, slots_max, slots_filled, remaining_prices):
+    slots_left = max(0, int(slots_max or 0) - int(slots_filled or 0))
+    if slots_left <= 0:
+        return 0
+    reserve = squad_completion_reserve(slots_left, remaining_prices)
+    return max(0, int(purse_remaining or 0) - reserve)
+
+
 def row_to_dict(row):
     return dict(row) if row else None
 
