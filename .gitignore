@@ -1,0 +1,26 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local runtime data (keep on the server only)
+.env
+auction.db
+auction_data.json
+
+# Uploads created at runtime (optional: remove if you want logos in git)
+# static/uploads/
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Deploy keys never belong in the repo
+gha_zoliga
+gha_zoliga.pub
+*_rsa
+*_ed25519
