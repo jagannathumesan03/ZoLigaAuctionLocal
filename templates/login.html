@@ -18,7 +18,7 @@
 
     <div class="role-toggle" role="tablist" aria-label="Access type">
       <button class="btn active" id="tabAdmin" type="button" role="tab" aria-selected="true" onclick="switchRole('admin')">Admin access</button>
-      <button class="btn" id="tabViewer" type="button" role="tab" aria-selected="false" onclick="switchRole('viewer')">Viewer access</button>
+      <button class="btn" id="tabViewer" type="button" role="tab" aria-selected="false" onclick="switchRole('viewer')">Viewer / Team</button>
     </div>
 
     <form id="adminForm" aria-label="Admin sign in">
@@ -33,12 +33,13 @@
       <button type="submit" class="btn btn-primary btn-block">Login as Admin</button>
     </form>
 
-    <form id="viewerForm" style="display:none;" aria-label="Viewer sign in">
+    <form id="viewerForm" style="display:none;" aria-label="Viewer or team sign in">
       <div class="field">
-        <label>Viewer Password</label>
+        <label>Password</label>
         <input type="password" id="viewerPassword" autocomplete="current-password" required>
       </div>
-      <button type="submit" class="btn btn-primary btn-block">Login as Viewer</button>
+      <p class="muted" style="margin: 0 0 12px; font-size: 0.78rem;">Use the public viewer password, or the password assigned to your team.</p>
+      <button type="submit" class="btn btn-primary btn-block">Enter auction</button>
     </form>
 
     <div class="error-msg" id="errorMsg" role="alert" aria-live="polite"></div>

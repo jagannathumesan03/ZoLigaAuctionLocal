@@ -4,15 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Auction — Football Tournament</title>
-<link rel="stylesheet" href="/static/css/style.css?v=fifa-1">
+<link rel="stylesheet" href="/static/css/style.css?v=manager-pitch-2">
 <script src="/static/js/theme.js?v=theme-1"></script>
 </head>
 <body class="viewer-page">
 
 <header class="topbar">
-  <div class="brand"><span class="dot" aria-hidden="true"></span><span>Live Auction</span></div>
+  <div class="brand"><span class="dot" aria-hidden="true"></span><span id="viewerBrand">Live Auction</span></div>
   <div class="ticker-wrap" id="tickerWrap">
     <span class="ticker-live-badge"><span aria-hidden="true"></span> Live</span>
+    <div class="ticker-primary" id="tickerPrimary" aria-live="polite">Waiting for the next player…</div>
     <div class="ticker-viewport" id="tickerViewport">
       <div class="ticker-track" id="tickerTrack">
         <span class="ticker-content" id="tickerContent"></span>
@@ -25,6 +26,8 @@
   </div>
 </header>
 
+<div id="auctionTimerDock" class="auction-timer-dock" aria-live="polite"></div>
+
 <main class="container viewer-shell">
 
   <section class="auction-broadcast" aria-labelledby="liveAuctionTitle">
@@ -32,33 +35,18 @@
     <div id="spotlight"></div>
   </section>
 
-  <section class="live-news-bar" aria-label="Live auction status">
-    <span class="live-news-label"><span aria-hidden="true"></span> Live</span>
-    <div id="liveNewsContent">Auction updates are loading...</div>
-  </section>
-
-  <section class="auction-dashboard" aria-label="Auction dashboard">
-    <section class="dashboard-card auction-overview" aria-labelledby="overviewTitle">
-      <div class="dashboard-heading"><h2 id="overviewTitle">Auction overview</h2></div>
-      <div id="auctionOverview"></div>
-    </section>
-
-    <section class="dashboard-card bid-history-panel" id="bidHistoryWrapper" aria-labelledby="bidHistoryTitle">
-      <div class="dashboard-heading"><h2 id="bidHistoryTitle">Bid history</h2><span class="activity-caption">Latest bid first</span></div>
-      <div id="bidHistory" class="bid-history-log"></div>
-    </section>
-
-    <section class="dashboard-card next-up-card" aria-labelledby="nextUpTitle">
-      <div class="dashboard-heading"><h2 id="nextUpTitle">Next available</h2><span class="deck-badge">On deck</span></div>
-      <div id="nextUp"></div>
-    </section>
-  </section>
+  <section class="auction-status-strip" id="auctionOverview" aria-label="Auction status"></section>
 
   <nav class="tabs" aria-label="Auction data views">
+    <button class="tab manager-tab" type="button" role="tab" aria-selected="false" data-tab="manager" hidden>Manager desk</button>
     <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="teams">Team purses</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="players">Player pool</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="team-view">Team view</button>
   </nav>
+
+  <section class="tab-content" id="tab-manager" role="tabpanel">
+    <div id="managerDesk" class="manager-desk"></div>
+  </section>
 
   <section class="tab-content active" id="tab-teams" role="tabpanel">
     <div class="section-heading compact"><div><p class="eyebrow">Live standings</p><h2>Team purses</h2></div><span class="connection-state"><span></span> Live updates connected</span></div>
@@ -89,7 +77,8 @@
 
 </main>
 
-<script src="/static/js/confetti.js?v=1"></script>
-<script src="/static/js/viewer.js?v=fifa-1"></script>
+<script src="/static/js/confetti.js?v=timer-1"></script>
+<script src="/static/js/pack-reveal.js?v=slot-h-1"></script>
+<script src="/static/js/viewer.js?v=manager-pitch-2"></script>
 </body>
 </html>

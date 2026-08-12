@@ -62,10 +62,27 @@ a { color: var(--accent-2); text-decoration: none; }
 
 .topbar-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
 
-/* ---------- Topbar live news ticker ----------
-   A general-purpose scrolling strip for the middle of the topbar. Populated in
-   viewer.js by a list of "ticker builder" functions so new items can be added
-   later without touching this CSS or the marquee mechanics. */
+/* Auction countdown — viewer mounts this under Logout; admin keeps it in spotlight */
+.auction-timer {
+  position: absolute; top: 65px; right: 14px; z-index: 3;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(5, 12, 20, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+/* ---------- Topbar live ticker ----------
+   Two priorities, not one crowded line: a static "primary" segment that
+   always shows the single most important fact right now (current player →
+   bid → leader, or a sold/unsold/going-once-twice call), and a "secondary"
+   marquee for supporting stats (highest sale, sold/remaining/active teams).
+   Populated in admin.js/viewer.js; the marquee mechanics (measured pixel
+   widths via the Web Animations API) live entirely in JS. */
 .ticker-wrap {
   flex: 1;
   display: flex;
@@ -85,6 +102,22 @@ a { color: var(--accent-2); text-decoration: none; }
   padding: 3px 8px;
   border-radius: 4px;
   margin-right: 12px;
+}
+.ticker-primary {
+  flex: 0 1 auto;
+  max-width: 46%;
+  margin-right: 16px;
+  padding-right: 16px;
+  border-right: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 750;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ticker-primary[hidden] {
+  display: none !important;
 }
 /* The badge lives outside this box, so scrolling text is clipped here and can
    never visually slide over it. .ticker-track's position is driven entirely
@@ -125,6 +158,10 @@ a { color: var(--accent-2); text-decoration: none; }
   border-radius: 50%;
   background: var(--text-dim);
   transform: translateY(-50%);
+}
+@media (max-width: 900px) {
+  .ticker-viewport { display: none; }
+  .ticker-primary { flex: 1; max-width: none; padding-right: 0; border-right: 0; }
 }
 @media (max-width: 768px) {
   .ticker-wrap { display: none; }
@@ -219,8 +256,11 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
 .player-card:hover { border-color: var(--accent-2); }
 .player-photo {
   width: 100%;
-  height: 140px;
-  object-fit: cover;
+  height: 180px;
+  object-fit: contain;
+  object-position: center;
+  padding: 10px;
+  box-sizing: border-box;
   border-radius: 8px;
   background: #0e141b;
 }
@@ -253,7 +293,7 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
 }
 
-/* ---------- Team card ---------- */
+/* ---------- Team card (admin roster tab) ---------- */
 .team-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -265,7 +305,7 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
 .team-name { font-weight: 800; font-size: 1.05rem; }
 .team-purse { font-size: 0.82rem; color: var(--text-dim); }
 .purse-bar { height: 6px; background: #0e141b; border-radius: 4px; overflow: hidden; margin: 6px 0 12px; }
-.purse-bar-fill { height: 100%; background: var(--accent); }
+.purse-bar-fill { height: 100%; background: var(--accent); transition: width 300ms ease, background 300ms ease; }
 .squad-list { display: flex; flex-direction: column; gap: 6px; }
 .squad-item {
   display: flex; align-items: center; justify-content: space-between;
@@ -276,7 +316,7 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   border: 1px dashed var(--border);
 }
 
-/* ---------- Live auction spotlight ---------- */
+/* ---------- Live auction spotlight (the hero) ---------- */
 .spotlight {
   background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(59,130,246,0.08));
   border: 1px solid var(--warn);
@@ -286,14 +326,8 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   gap: 24px;
   align-items: center;
   margin-bottom: 24px;
-  animation: glow 2s infinite;
 }
-@keyframes glow {
-  0% { box-shadow: 0 0 0px rgba(245,158,11,0.2); }
-  50% { box-shadow: 0 0 22px rgba(245,158,11,0.35); }
-  100% { box-shadow: 0 0 0px rgba(245,158,11,0.2); }
-}
-.spotlight img { width: 140px; height: 140px; object-fit: cover; border-radius: 12px; background: #0e141b; }
+.spotlight img { width: 140px; height: 140px; object-fit: contain; object-position: center; padding: 6px; box-sizing: border-box; border-radius: 12px; background: #0e141b; }
 .spotlight .info { flex: 1; }
 .spotlight .info h2 { margin: 0 0 6px; font-size: 1.6rem; }
 .spotlight .empty-state { text-align: center; color: var(--text-dim); padding: 30px; width: 100%; }
@@ -305,8 +339,6 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   color: var(--accent);
   line-height: 1.1;
 }
-.bid-leading { font-size: 0.85rem; color: var(--text-dim); margin-top: 2px; }
-.bid-leading b { color: var(--text); }
 .bid-panel { margin-top: 14px; }
 .bid-team-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .team-bid-btn { font-weight: 700; }
@@ -332,19 +364,25 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   max-height: 200px;
   overflow-y: auto;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: 6px;
   margin-top: 10px;
 }
 .bid-history-item {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 8px;
   background: var(--bg-card); border: 1px solid var(--border);
   padding: 7px 12px; border-radius: 8px; font-size: 0.85rem;
 }
-/* the log is built oldest-first in the DOM and flipped visually via column-reverse,
-   so the *current* leading bid is the last DOM child, not the first */
-.bid-history-item:last-child { border-color: var(--accent); }
+.bid-history-item .bid-history-team,
+.bid-history-item > span:first-child { flex: 1; min-width: 0; }
+.bid-history-item .player-price { flex: 0 0 auto; text-align: right; }
+.bid-history-time { flex: 0 0 54px; text-align: right; color: var(--text-dim); font-size: 0.66rem; }
+/* Newest / current bid is first in the list — keep it highlighted */
+.bid-history-item.is-current,
+.bid-history-item:first-child { border-color: var(--accent); }
 .bid-history-empty { color: var(--text-dim); font-size: 0.85rem; padding: 8px 0; }
+.bid-history-start { opacity: 0.7; border-style: dashed; }
+.bid-history-start > span:first-child { font-style: italic; color: var(--text-dim); }
 
 /* ---------- Login ---------- */
 .login-wrap {
@@ -411,6 +449,10 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   --border-strong: #3b5b73;
   --text: #eef5f8;
   --text-dim: #9badbc;
+  /* Semantic color system for the broadcast UI: navy/black background, gold
+     for auction highlights & premium accents (--warn), green for winning
+     bids/positive state (--accent), red for LIVE/urgent (--danger), blue for
+     secondary information (--accent-2), white for primary text (--text). */
   --accent: #26d77d;
   --accent-deep: #0e8e4c;
   --accent-2: #4cb7ff;
@@ -524,7 +566,133 @@ h1, h2, h3 { letter-spacing: 0; }
 .panel { padding: 22px; margin-bottom: 22px; background: rgba(16, 28, 40, 0.92); }
 .admin-shell .panel { box-shadow: var(--shadow); }
 .auction-stage { padding: 0; overflow: hidden; background: transparent; border: 0; box-shadow: none; }
+.auction-control-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.auction-control-actions .btn-primary { min-width: 180px; min-height: 44px; font-size: 0.95rem; }
+.auction-control-hint { margin: 0; max-width: 420px; line-height: 1.4; }
 .bid-workspace { border-top: 2px solid rgba(38, 215, 125, 0.62); }
+.previous-bid-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 10px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+.previous-bid-row .eyebrow { margin: 0; }
+.previous-bid-row strong { color: #dce6fc; font-size: 0.95rem; }
+.auction-team-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+.auction-team-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid rgba(79, 103, 165, 0.35);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(13, 29, 62, 0.92), rgba(10, 21, 45, 0.88));
+  color: var(--text);
+  font: inherit;
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+.auction-team-tile:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(38, 215, 125, 0.55);
+}
+.auction-team-tile.is-leading {
+  border-color: rgba(38, 215, 125, 0.65);
+  background: linear-gradient(145deg, rgba(13, 45, 38, 0.9), rgba(10, 30, 28, 0.88));
+}
+.auction-team-tile.is-disabled,
+.auction-team-tile:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+.auction-team-tile-logo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0d1d3c;
+  border: 1px solid rgba(116, 153, 229, 0.4);
+}
+.auction-team-tile-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+  flex: 1;
+}
+.auction-team-tile-name {
+  color: #e8eefc;
+  font-size: 0.88rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auction-team-tile-meta {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+}
+.auction-team-tile .purse-bar {
+  height: 4px;
+  margin: 2px 0 0;
+  width: 100%;
+}
+.auction-team-tile-action {
+  color: #57e69c;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.auction-team-tile.is-disabled .auction-team-tile-action,
+.auction-team-tile:disabled .auction-team-tile-action {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.auction-desk-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.bid-amount-editor {
+  margin: 12px 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(79, 103, 165, 0.3);
+  border-radius: 8px;
+  background: rgba(8, 16, 36, 0.55);
+}
+.bid-amount-editor > label { margin-bottom: 8px; }
+.bid-amount-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.bid-amount-editor-row input {
+  width: min(220px, 100%);
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.bid-amount-preview {
+  color: #57e69c;
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.bid-amount-editor .bid-tier-buttons { margin: 0; }
 .grid { gap: 16px; }
 .grid-teams { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .grid-players { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
@@ -543,6 +711,11 @@ h1, h2, h3 { letter-spacing: 0; }
 .ticker-content { font-size: 0.78rem; color: #ffc247; }
 @keyframes live-pulse { 50% { opacity: 0.3; } }
 
+/* ---------- Hero: current player + current bid ---------- */
+/* This is the dominant element on the page. Name and current bid must read
+   from across a room; nothing else on the page should visually compete with
+   them (see .auction-status-strip, .team-tile, .bid-activity below, which
+   are deliberately smaller/quieter). */
 .spotlight {
   position: relative;
   min-height: 272px;
@@ -554,45 +727,195 @@ h1, h2, h3 { letter-spacing: 0; }
   border: 1px solid rgba(255, 179, 26, 0.68);
   border-radius: var(--radius);
   box-shadow: 0 0 0 1px rgba(255, 179, 26, 0.07), 0 20px 46px rgba(0, 0, 0, 0.25);
-  animation: none;
 }
-.spotlight-player-photo { width: 196px; height: 216px; flex: 0 0 196px; border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 6px; object-fit: cover; }
+.spotlight-player-photo { width: 196px; height: 216px; flex: 0 0 196px; border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 6px; object-fit: contain; object-position: center; padding: 8px; box-sizing: border-box; background: #0e141b; }
 .spotlight .info { display: flex; flex: 1; flex-direction: column; justify-content: center; min-width: 0; }
-.spotlight .info h2 { margin: 8px 0 4px; font-size: clamp(1.55rem, 3vw, 2.25rem); line-height: 1.04; }
-.spotlight .empty-state { display: flex; align-items: center; justify-content: center; min-height: 220px; color: var(--text-dim); }
+.spotlight .info h2 { margin: 6px 0 4px; font-size: clamp(1.55rem, 3vw, 2.25rem); line-height: 1.04; }
+.spotlight .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 220px;
+  width: 100%;
+  text-align: center;
+  color: var(--text-dim);
+}
+.spotlight .empty-state .eyebrow { margin: 0; }
+.spotlight .empty-state h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.35rem, 3vw, 1.9rem);
+  line-height: 1.2;
+}
+.spotlight-waiting { justify-content: center; overflow: hidden; }
+.spotlight-waiting.has-waiting-bg {
+  background-image:
+    linear-gradient(180deg, rgba(6, 12, 24, 0.55), rgba(6, 12, 24, 0.72)),
+    var(--waiting-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.spotlight-waiting.has-waiting-bg .empty-state { color: rgba(236, 244, 255, 0.88); }
+.spotlight-waiting.has-waiting-bg .empty-state h2 { color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45); }
+.spotlight-waiting.has-waiting-bg .empty-state .eyebrow { color: #9fd0ff; }
 .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.64rem; letter-spacing: 0.08em; }
 .badge-auction { background: rgba(255, 179, 26, 0.16); animation: none; }
 .position-badge { align-self: flex-start; margin-top: 2px; border: 1px solid #ffe19a; background: #f4b942; box-shadow: 0 3px 9px rgba(244, 185, 66, 0.24); color: #17233d; font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.1em; }
 .spotlight-base-price { margin-top: 6px; }
 .badge-sold { background: rgba(38, 215, 125, 0.14); }
-.bid-amount-display { margin-top: 7px; color: #57e69c; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: 0; }
-.bid-leading { margin-top: 6px; font-size: 0.86rem; }
-.bid-leading b { color: #dff8ea; }
-.auction-facts { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 14px; color: var(--text-dim); font-size: 0.76rem; }
-.auction-facts span { display: block; color: var(--text-dim); }
-.auction-facts strong { display: block; margin-bottom: 1px; color: var(--text); font-size: 0.88rem; }
-.leading-bid-card { display: flex; flex: 0 0 190px; flex-direction: column; align-items: center; justify-content: center; min-width: 0; padding: 18px 14px; border: 1px solid rgba(38, 215, 125, 0.36); border-radius: 6px; background: rgba(4, 24, 25, 0.45); text-align: center; }
-.leading-bid-card .eyebrow { color: #a7eec5; }
-.leading-team-logo { width: 64px; height: 64px; margin: 3px 0 9px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 50%; background: var(--bg-card); object-fit: cover; }
-.leading-bid-card strong { max-width: 100%; color: var(--text); font-size: 0.96rem; line-height: 1.2; }
-.leading-bid-card span { margin-top: 10px; color: var(--text-dim); font-size: 0.67rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
-.leading-bid-card b { margin-top: 2px; color: var(--accent); font-size: 1.35rem; line-height: 1.2; }
-.leading-bid-card small { margin-top: 7px; color: var(--text-dim); font-size: 0.68rem; }
-.leading-bid-empty { border-style: dashed; border-color: rgba(255, 179, 26, 0.45); background: rgba(62, 43, 13, 0.2); }
-.leading-bid-empty .eyebrow { color: #ffd173; }
-.leading-bid-empty span { margin-top: 7px; letter-spacing: 0; text-transform: none; }
-.leading-bid-mark { width: 32px; height: 32px; margin: 5px 0 10px; border: 2px solid var(--warn); border-radius: 50%; box-shadow: 0 0 0 6px rgba(255, 179, 26, 0.09); }
 
-.bid-history-panel { background: linear-gradient(135deg, rgba(16, 28, 40, 0.98), rgba(17, 38, 45, 0.92)); }
+.auction-state-label { color: var(--warn); }
+.auction-state-label.is-bidding { color: #57e69c; }
+
+.current-bid-block { margin-top: 12px; }
+.bid-amount-display { margin-top: 2px; color: #57e69c; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: 0; }
+
+/* Bid pulse: the current-bid number and the latest-bid-activity amount both
+   use this on every genuine update -- a brief 300-500ms scale + glow, not a
+   loop, so it's noticeable without feeling like an arcade game. */
+@keyframes bid-pulse {
+  0% { transform: scale(1); text-shadow: none; }
+  35% { transform: scale(1.07); text-shadow: 0 0 16px rgba(87, 230, 156, 0.55); }
+  100% { transform: scale(1); text-shadow: none; }
+}
+.bid-pulse { display: inline-block; animation: bid-pulse 420ms ease-out; }
+
+.leading-team-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.95rem; color: var(--text-dim); }
+/* Must beat `.spotlight img` (140px) so the leading-team logo matches the text */
+.spotlight img.mini-team-logo,
+.leading-team-row .mini-team-logo {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 1em;
+  padding: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0d1d3c;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.leading-team-name { color: #dff8ea; font-size: 1em; font-weight: 800; }
+.leading-chip { padding: 2px 9px; border-radius: 999px; background: rgba(38, 215, 125, 0.18); color: #57e69c; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.leading-chip-sm { padding: 1px 7px; font-size: 0.56rem; }
+
+/* "Going once" / "Going twice" -- ephemeral, broadcast-only (see backend
+   /api/auction/call); never blocks the bid info underneath, just calls
+   attention to it briefly. */
+.call-banner {
+  position: absolute; top: 14px; left: 50%; z-index: 3;
+  padding: 6px 18px; border-radius: 999px;
+  transform: translateX(-50%);
+  background: linear-gradient(160deg, #ffe18a, #d99a1b);
+  color: #241a00;
+  font-size: 0.78rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  animation: call-banner-pulse 1s ease-in-out infinite;
+}
+.call-banner.is-twice { background: linear-gradient(160deg, #ff9b7a, #c73f2e); color: #2a0700; }
+@keyframes call-banner-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+
+/* Auction countdown visual states (position set by .topbar-timer or spotlight) */
+.auction-timer-label {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-dim);
+}
+.auction-timer-value {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.45rem, 3vw, 1.9rem);
+  font-weight: 800; line-height: 1;
+  color: #e8f3ff;
+}
+.auction-timer.is-urgent {
+  border-color: rgba(255, 92, 103, 0.55);
+  background: rgba(48, 10, 14, 0.82);
+  box-shadow: 0 0 0 1px rgba(255, 92, 103, 0.2), 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.auction-timer.is-urgent .auction-timer-value { color: #ff8b91; }
+.auction-timer.is-urgent .auction-timer-label { color: #ffb4b8; }
+.auction-timer.is-paused {
+  border-color: rgba(255, 179, 26, 0.55);
+  background: rgba(48, 34, 8, 0.86);
+  box-shadow: 0 0 0 1px rgba(255, 179, 26, 0.18), 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.auction-timer.is-paused .auction-timer-value { color: #ffcb46; }
+.auction-timer.is-paused .auction-timer-label { color: #ffd98a; }
+.auction-timer.is-revealing {
+  border-color: rgba(90, 160, 255, 0.55);
+  background: rgba(10, 24, 48, 0.86);
+}
+.auction-timer.is-revealing .auction-timer-value { color: #9fd0ff; }
+.auction-timer.is-revealing .auction-timer-label { color: #b7dbff; }
+
+.settings-form { max-width: 420px; }
+.settings-help { margin: 0 0 14px; }
+.settings-timer-row { align-items: flex-end; }
+.settings-divider { height: 1px; margin: 28px 0; background: var(--border); }
+.settings-bg-block { max-width: 520px; }
+.settings-bg-preview-wrap { margin-top: 10px; }
+.settings-bg-preview {
+  width: 100%;
+  min-height: 160px;
+  border-radius: 12px;
+  border: 1px dashed var(--border-strong);
+  background: linear-gradient(105deg, #0c1530, #0b1630 52%, #0b1b30);
+  background-size: cover;
+  background-position: center;
+}
+.settings-bg-preview.has-image {
+  border-style: solid;
+  border-color: rgba(78, 103, 177, 0.45);
+}
+
+/* Sold / unsold transitional state -- fills the hero slot for a few seconds
+   right after a result, instead of jumping straight to "waiting for next". */
+.result-state { justify-content: center; }
+.result-state .info { justify-content: center; text-align: left; }
+.result-tag {
+  position: absolute; top: 16px; right: 16px; z-index: 2;
+  padding: 6px 16px; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.result-tag.is-sold { background: rgba(38, 215, 125, 0.18); color: #57e69c; border: 1px solid rgba(38, 215, 125, 0.5); }
+.result-tag.is-unsold { background: rgba(255, 92, 103, 0.16); color: #ff8b91; border: 1px solid rgba(255, 92, 103, 0.45); }
+.result-price { margin-top: 8px; color: #57e69c; font-size: clamp(1.8rem, 3.4vw, 2.6rem); font-weight: 800; }
+.result-team { margin-top: 6px; font-size: 1rem; color: var(--text-dim); }
+.result-team b { color: var(--text); }
+
+/* Six sub-stats as compact bar meters -- scannable at a glance, but sized to
+   stay clearly secondary to the name/current bid above them. */
+.stat-bars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px 18px; margin-top: 16px; max-width: 440px; }
+.stat-bar-row { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; }
+.stat-bar-label { flex: 0 0 26px; color: var(--text-dim); font-weight: 800; letter-spacing: 0.02em; }
+.stat-bar-track { flex: 1; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.stat-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
+.stat-bar-value { flex: 0 0 20px; text-align: right; color: var(--text); font-weight: 800; }
+
+.bid-history-panel, .bid-activity-card { background: linear-gradient(135deg, rgba(16, 28, 40, 0.98), rgba(17, 38, 45, 0.92)); }
 .activity-caption { color: var(--text-dim); font-size: 0.71rem; }
 .bid-history-log { max-height: 250px; gap: 7px; padding-right: 3px; }
 .bid-history-item { min-height: 42px; border-color: rgba(59, 91, 115, 0.72); border-radius: 6px; background: rgba(6, 15, 23, 0.42); padding: 9px 11px; }
-.bid-history-item:last-child { border-color: rgba(38, 215, 125, 0.75); background: rgba(38, 215, 125, 0.08); }
-.bid-history-item:last-child::before { content: 'Latest'; color: var(--accent); font-size: 0.65rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.bid-history-item.is-current,
+.bid-history-item:first-child { border-color: rgba(38, 215, 125, 0.75); background: rgba(38, 215, 125, 0.08); }
+
+/* Latest bid activity -- replaces the old duplicate "leading bid" card that
+   just repeated the hero's current-bid number. This shows what *changed*:
+   amount, team, increment, and how long ago. */
+.bid-activity { display: flex; flex-direction: column; gap: 2px; padding-bottom: 14px; margin-bottom: 12px; border-bottom: 1px dashed var(--border); }
+.bid-activity-amount { color: #57e69c; font-size: 1.9rem; font-weight: 800; line-height: 1.05; }
+.bid-activity-team { display: flex; align-items: center; gap: 8px; margin-top: 5px; color: var(--text); font-size: 0.86rem; font-weight: 700; }
+.bid-activity-team img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: #0a1428; }
+.bid-activity-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; color: var(--text-dim); font-size: 0.72rem; }
+.bid-activity-increment { color: #57e69c; font-weight: 800; }
+.bid-activity-empty { padding: 4px 0 14px; color: var(--text-dim); font-size: 0.82rem; }
+.bid-history-heading { margin: 0 0 6px; }
+.bid-history-heading h3 { margin: 0; color: #dce6fc; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
 
 .player-card { gap: 9px; padding: 11px; background: rgba(21, 37, 52, 0.88); }
 .player-card:hover { border-color: var(--accent-2); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18); transform: translateY(-2px); }
-.player-photo { height: 158px; border-radius: 5px; }
+.player-photo { height: 190px; border-radius: 5px; }
 .player-name { font-size: 0.93rem; }
 .player-meta { font-size: 0.74rem; }
 .player-price { font-size: 0.88rem; }
@@ -602,16 +925,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .team-logo { width: 46px; height: 46px; border-radius: 6px; }
 .team-name { font-size: 0.98rem; }
 .team-purse { font-size: 0.75rem; }
-.purse-overview { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin: 13px 0 8px; }
-.purse-chart { position: relative; display: grid; place-items: center; width: 48px; aspect-ratio: 1; border-radius: 50%; background: conic-gradient(var(--purse-color) calc(var(--purse-percent) * 1%), rgba(93, 117, 137, 0.22) 0); }
-.purse-chart::before { content: ''; position: absolute; width: 38px; aspect-ratio: 1; border-radius: 50%; background: var(--bg-card); }
-.purse-chart span { position: relative; z-index: 1; color: var(--text); font-size: 0.64rem; font-weight: 800; }
-.purse-details { display: flex; flex-direction: column; min-width: 0; }
-.purse-details > span, .purse-details small { color: var(--text-dim); font-size: 0.66rem; }
-.purse-details strong { color: var(--text); font-size: 0.94rem; line-height: 1.2; }
-.purse-state { color: var(--purse-color, var(--text-dim)); font-size: 0.63rem; font-weight: 800; letter-spacing: 0.06em; text-align: right; text-transform: uppercase; }
 .purse-bar { height: 7px; margin: 0 0 13px; background: rgba(5, 14, 22, 0.72); }
-.purse-bar-fill { background: var(--accent); transition: width 300ms ease, background 300ms ease; }
 .squad-list { gap: 5px; }
 .squad-item { padding: 7px 8px; border-radius: 5px; background: rgba(6, 15, 23, 0.42); font-size: 0.76rem; }
 .squad-slot-empty { padding: 7px 8px; border-radius: 5px; font-size: 0.72rem; }
@@ -655,7 +969,6 @@ h1, h2, h3 { letter-spacing: 0; }
   .ticker-wrap { margin-inline: 8px; }
   .spotlight { min-height: 0; }
   .spotlight-player-photo { width: 156px; height: 178px; flex-basis: 156px; }
-  .leading-bid-card { flex-basis: 164px; }
 }
 
 @media (max-width: 680px) {
@@ -679,12 +992,10 @@ h1, h2, h3 { letter-spacing: 0; }
   .filter-row { grid-template-columns: 1fr; }
   .spotlight { min-height: 0; padding: 18px; gap: 17px; }
   .spotlight-player-photo { width: 100%; height: min(54vw, 230px); flex-basis: auto; }
-  .leading-bid-card { width: 100%; min-height: 142px; }
   .spotlight .info h2 { font-size: 1.72rem; }
   .bid-amount-display { font-size: 2.35rem; }
-  .auction-facts { gap: 10px 18px; }
+  .stat-bars { grid-template-columns: repeat(2, 1fr); max-width: none; }
   .grid-teams, .grid-players { grid-template-columns: 1fr; }
-  .purse-state { display: none; }
   .bid-tier-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .bid-tier-btn { min-width: 0; padding-inline: 6px; }
   .bid-summary { align-items: flex-start; flex-direction: column; gap: 4px; }
@@ -704,72 +1015,292 @@ h1, h2, h3 { letter-spacing: 0; }
 /* ---------- Viewer broadcast dashboard ---------- */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .viewer-page { background: radial-gradient(circle at 18% 0, rgba(41, 26, 111, 0.22), transparent 33%), linear-gradient(180deg, #07111f, #09111a 58%); }
+.manager-desk { margin: 0 0 22px; }
+.manager-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; margin-bottom: 12px; }
+.manager-block-row { display: flex; gap: 14px; align-items: center; padding-top: 12px; }
+.manager-block-row > img { width: 72px; height: 90px; object-fit: contain; object-position: center; padding: 4px; box-sizing: border-box; border-radius: 6px; background: #101d38; }
+.manager-block-row strong { display: block; color: #eff4ff; font-size: 1.05rem; }
+.manager-block-row span, .manager-block-row .muted { display: block; margin-top: 4px; }
+.manager-kpis { display: flex; gap: 28px; padding: 12px 0 8px; }
+.manager-kpis span { display: block; color: var(--text-dim); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.manager-kpis strong { color: #eef5f8; font-size: 1.25rem; }
+.manager-signings { padding: 14px; }
+.manager-signing-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.manager-signing { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid rgba(83, 122, 200, 0.22); border-radius: 6px; background: rgba(20, 42, 86, 0.45); }
+.manager-signing img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #0d1d3c; }
+.manager-signing-main { flex: 1; min-width: 0; }
+.manager-signing-main strong { display: block; color: #dce8ff; font-size: 0.82rem; }
+.manager-signing-main span { color: #92a7ca; font-size: 0.68rem; }
+.manager-signing b { color: #25df8a; font-size: 0.78rem; white-space: nowrap; }
+.manager-squad {
+  display: grid;
+  grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.manager-pitch-card .dashboard-heading { align-items: center; }
+.manager-pitch {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  background: repeating-linear-gradient(180deg, #14432f 0 8%, #103a29 8% 16%);
+}
+.manager-pitch-line {
+  position: absolute;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+.manager-pitch-line.halfway {
+  left: 5%; right: 5%; top: 50%;
+  border-bottom: none; border-left: none; border-right: none;
+}
+.manager-pitch-line.circle {
+  left: 50%; top: 50%;
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.manager-pitch-line.box-top {
+  left: 28%; right: 28%; top: 3%; height: 12%;
+  border-top: none;
+}
+.manager-pitch-line.box-bottom {
+  left: 28%; right: 28%; bottom: 3%; height: 12%;
+  border-bottom: none;
+}
+.manager-pitch-line.touch {
+  left: 5%; right: 5%; top: 3%; bottom: 3%;
+}
+.manager-spot {
+  position: absolute;
+  width: 96px;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.manager-spot img,
+.manager-spot-vacant {
+  width: 48px; height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.manager-spot img {
+  display: block;
+  object-fit: cover;
+  border: 2.5px solid #fff;
+  background: #0d1d3c;
+}
+.manager-spot-vacant {
+  border: 2px dashed rgba(255, 255, 255, 0.6);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.manager-spot-name {
+  margin-top: 6px;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-shadow: 0 1px 4px #000;
+}
+.manager-spot-meta {
+  color: #dce8e2;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-shadow: 0 1px 4px #000;
+}
+.manager-spot-meta.is-cover { color: #f5b963; }
+.manager-bench { margin-top: 14px; }
+.manager-bench-label {
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.manager-bench-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.manager-bench-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid rgba(83, 122, 200, 0.28);
+  border-radius: 999px;
+  background: rgba(20, 42, 86, 0.45);
+  color: #dce8ff;
+  font-size: 0.72rem;
+}
+.manager-bench-chip .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.manager-signings-table { width: 100%; margin-top: 12px; border-collapse: collapse; min-width: 520px; }
+.manager-signings-table th,
+.manager-signings-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(83, 122, 200, 0.18);
+  text-align: left;
+  vertical-align: middle;
+}
+.manager-signings-table th {
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.manager-signings-table td { color: #dce8ff; font-size: 0.8rem; }
+.manager-signings-table td.num { font-variant-numeric: tabular-nums; }
+.manager-signings-table td.paid { color: #25df8a; font-weight: 700; text-align: right; }
+.manager-signings-table th.paid { text-align: right; }
+.manager-signings-table img {
+  width: 40px; height: 40px; border-radius: 50%;
+  object-fit: cover; background: #0d1d3c;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+}
+.manager-pos-chip {
+  display: inline-block;
+  min-width: 36px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: center;
+}
+.manager-signings-wrap { overflow-x: auto; }
+@media (max-width: 760px) {
+  .manager-grid, .manager-squad { grid-template-columns: 1fr; }
+}
 .viewer-page .container { max-width: 1180px; padding-top: 12px; }
 .viewer-page .topbar { min-height: 58px; background: rgba(6, 13, 29, 0.95); }
 .viewer-page .auction-broadcast { margin-top: 0; }
+
+/* Fixed dock under Logout — outside topbar and spotlight */
+.auction-timer-dock {
+  position: fixed;
+  top: 72px;
+  right: 20px;
+  z-index: 60;
+  pointer-events: none;
+}
+.auction-timer-dock:empty { display: none; }
+.auction-timer-dock .auction-timer {
+  position: static;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+.auction-timer-dock .auction-timer-value { font-size: 1.35rem; }
+
+@media (max-width: 760px) {
+  .auction-timer-dock { top: 64px; right: 12px; }
+}
 .viewer-page .spotlight { min-height: 288px; padding: 20px; gap: 24px; background: linear-gradient(105deg, #0c1530, #0b1630 52%, #0b1b30); border-color: rgba(78, 103, 177, 0.3); box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2); }
+.viewer-page .spotlight-waiting.has-waiting-bg {
+  background-image:
+    linear-gradient(180deg, rgba(7, 14, 32, 0.5), rgba(7, 14, 32, 0.7)),
+    var(--waiting-bg-image);
+  background-size: cover;
+  background-position: center;
+}
 .viewer-page .spotlight-player-photo { width: 184px; height: 238px; flex-basis: 184px; border-color: rgba(126, 93, 255, 0.4); border-radius: 8px; }
 .viewer-page .spotlight .info { justify-content: flex-start; padding-top: 10px; }
+.viewer-page .spotlight.has-bid-panel .info { flex: 1 1 0; max-width: none; }
 .viewer-page .spotlight .info h2 { color: #f6f7ff; font-size: clamp(1.55rem, 3vw, 2.1rem); }
+.viewer-page .leading-team-row { font-size: 2rem; }
+.viewer-page .leading-team-name { font-size: 2rem; }
 .viewer-page .badge-auction { background: rgba(255, 179, 26, 0.12); color: #ffcb46; }
-.viewer-page .bid-amount-display { margin-top: 8px; color: #1de58a; }
-.viewer-page .auction-facts { gap: 8px; margin-top: 15px; }
-.viewer-page .auction-facts > div { min-width: 102px; padding: 8px 10px; border: 1px solid rgba(103, 124, 184, 0.24); border-radius: 6px; background: rgba(17, 28, 68, 0.55); }
-.viewer-page .auction-facts span { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
-.viewer-page .leading-bid-card { flex-basis: 224px; border-color: rgba(69, 122, 220, 0.33); background: linear-gradient(180deg, rgba(9, 23, 54, 0.96), rgba(11, 26, 48, 0.82)); border-radius: 8px; }
-.viewer-page .leading-bid-card .eyebrow { color: #ffcb46; }
-.viewer-page .leading-team-logo { width: 82px; height: 82px; border-color: rgba(91, 154, 255, 0.64); }
-.viewer-page .leading-bid-card b { font-size: 1.65rem; }
+.viewer-page .bid-amount-display { color: #1de58a; }
 
-.live-news-bar { display: flex; align-items: center; gap: 16px; min-height: 45px; margin: 12px 0; padding: 8px 14px; overflow: hidden; border: 1px solid rgba(255, 92, 103, 0.8); border-radius: 7px; background: linear-gradient(90deg, rgba(49, 10, 23, 0.9), rgba(10, 18, 43, 0.9)); color: var(--text-dim); font-size: 0.75rem; }
-.live-news-label { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: #ff7d87; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-.live-news-label > span { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 4px rgba(255, 92, 103, 0.13); }
-#liveNewsContent { overflow: hidden; color: #cbd7f2; text-overflow: ellipsis; white-space: nowrap; }
+/* Bid activity lives in the empty right half of the live spotlight card. */
+.spotlight-bid-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 300px;
+  width: min(300px, 100%);
+  min-width: 220px;
+  max-width: 320px;
+  align-self: stretch;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(79, 103, 165, 0.35);
+  border-radius: 8px;
+  background: linear-gradient(160deg, rgba(8, 16, 36, 0.92), rgba(10, 22, 48, 0.78));
+  box-shadow: none;
+  overflow: hidden;
+}
+.spotlight-bid-panel .dashboard-heading { flex: 0 0 auto; padding-bottom: 8px; }
+.spotlight-bid-panel .bid-history-log {
+  flex: 1 1 auto;
+  max-height: 220px;
+  min-height: 0;
+  margin-top: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
-.auction-dashboard { display: grid; grid-template-columns: 0.9fr 1.72fr 1.08fr; gap: 12px; margin: 0 0 14px; }
-.dashboard-card { min-width: 0; min-height: 190px; padding: 14px; border: 1px solid rgba(79, 103, 165, 0.3); border-radius: 8px; background: linear-gradient(135deg, rgba(12, 24, 54, 0.94), rgba(10, 21, 45, 0.88)); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.16); }
+.dashboard-card { min-width: 0; padding: 14px; border: 1px solid rgba(79, 103, 165, 0.3); border-radius: 8px; background: linear-gradient(135deg, rgba(12, 24, 54, 0.94), rgba(10, 21, 45, 0.88)); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.16); }
+.next-up-card { min-height: 190px; }
 .dashboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding-bottom: 10px; border-bottom: 1px solid rgba(93, 119, 184, 0.18); }
 .dashboard-heading h2 { margin: 0; color: #dce6fc; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 .dashboard-heading .activity-caption { font-size: 0.62rem; }
-.overview-stats { display: grid; gap: 5px; margin-top: 12px; }
-.overview-stats > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 8px; border-radius: 5px; background: rgba(16, 36, 76, 0.45); }
-.overview-stats span { color: #a1b1d1; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
-.overview-stats strong { color: #28e694; font-size: 0.9rem; }
-.overview-stats > div:nth-child(2) strong { color: #5bc1ff; }
-.overview-stats > div:nth-child(3) strong { color: #c899ff; font-size: 0.72rem; }
-.overview-stats > div:nth-child(4) strong { color: #ffcf4e; }
-.viewer-page .bid-history-panel { margin: 0; }
-.viewer-page .bid-history-log { max-height: 150px; margin-top: 10px; }
+
+/* Auction status -- a slim, quiet strip. Deliberately smaller/plainer than
+   the hero above it: four numbers, nothing more. */
+.auction-status-strip { display: flex; gap: 10px; margin: 0 0 22px; }
+.status-chip { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 10px; border: 1px solid rgba(79, 103, 165, 0.28); border-radius: 8px; background: rgba(16, 28, 40, 0.7); text-align: center; }
+.status-chip strong { color: #eef5f8; font-size: 1.15rem; font-weight: 800; }
+.status-chip span { color: var(--text-dim); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.status-chip.is-highlight { border-color: rgba(38, 215, 125, 0.4); background: rgba(38, 215, 125, 0.08); }
+.status-chip.is-highlight strong { color: #57e69c; }
+
+.viewer-page .bid-activity-card { margin: 0; }
+.viewer-page .bid-history-log { max-height: 150px; margin-top: 0; }
+.viewer-page .spotlight-bid-panel .bid-history-log { max-height: 300px; }
+.viewer-page .spotlight-bid-panel.bid-activity-card { box-shadow: none; }
 .viewer-page .bid-history-item { min-height: 35px; padding: 6px 8px; color: #dce6fc; font-size: 0.72rem; }
-.bid-history-team { display: inline-flex; align-items: center; min-width: 0; gap: 7px; }
-.bid-history-team img { width: 21px; height: 21px; border-radius: 50%; background: #0a1428; object-fit: cover; }
-.viewer-page .bid-history-item:last-child::before { display: none; }
+.bid-history-team { display: inline-flex; align-items: center; min-width: 0; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bid-history-team img { width: 21px; height: 21px; flex: 0 0 21px; border-radius: 50%; background: #0a1428; object-fit: cover; }
+.spotlight .bid-history-team img {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 1em;
+  padding: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
 .deck-badge { padding: 3px 6px; border-radius: 4px; background: rgba(45, 148, 255, 0.14); color: #58bdff; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .next-player { display: grid; grid-template-columns: 74px minmax(0, 1fr); align-items: center; gap: 11px; padding-top: 13px; }
-.next-player > img { width: 74px; height: 92px; border-radius: 6px; background: #101d38; object-fit: cover; }
+.next-player > img { width: 74px; height: 92px; border-radius: 6px; background: #101d38; object-fit: contain; object-position: center; padding: 4px; box-sizing: border-box; }
 .next-player > div { display: flex; flex-direction: column; min-width: 0; }
 .next-player strong { color: #eff4ff; font-size: 0.9rem; }
 .next-player span { margin-top: 5px; color: #a8bad8; font-size: 0.7rem; }
 .next-player small { margin-top: 7px; color: #c9d5f1; font-size: 0.66rem; }
 .next-player-empty { display: grid; min-height: 125px; place-items: center; color: var(--text-dim); font-size: 0.75rem; text-align: center; }
+.next-player .ovr-badge { top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 5px; }
+.next-player .ovr-badge .ovr-value { font-size: 0.6rem; }
+.next-player .ovr-badge .ovr-label { display: none; }
 
 .viewer-page .tabs { margin: 26px 0 14px; }
 .viewer-page .section-heading.compact { align-items: center; margin: 0 0 12px; }
 .viewer-page .section-heading.compact h2 { color: #dce6fc; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; }
-.viewer-page .grid-teams { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
-.viewer-page .team-card { min-height: 106px; padding: 10px; border-color: rgba(79, 103, 165, 0.26); border-radius: 6px; background: linear-gradient(145deg, rgba(13, 29, 62, 0.88), rgba(10, 21, 45, 0.84)); }
-.viewer-page .team-header { gap: 8px; margin-bottom: 8px; }
-.viewer-page .team-logo { width: 34px; height: 34px; border-radius: 50%; }
-.viewer-page .team-name { color: #e2eaff; font-size: 0.72rem; }
-.team-player-slots { display: flex; align-items: center; gap: 3px; min-height: 16px; margin-top: 4px; }
-.team-player-slots img, .team-player-slots span { width: 14px; height: 14px; flex: 0 0 14px; border: 1px solid rgba(119, 151, 218, 0.5); border-radius: 50%; background: rgba(17, 37, 76, 0.85); object-fit: cover; }
-.team-player-slots img { border-color: #75c8ff; box-shadow: 0 0 0 1px rgba(117, 200, 255, 0.14); }
-.viewer-page .purse-overview { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; margin: 2px 0 5px; }
-.compact-purse-percent { display: grid; place-items: center; width: 30px; height: 30px; border: 2px solid var(--purse-color); border-radius: 50%; color: var(--purse-color); font-size: 0.55rem; font-weight: 800; }
-.viewer-page .purse-details > span { color: #cfdaee; font-size: 0.67rem; font-weight: 750; }
-.viewer-page .purse-details small { display: none; }
-.viewer-page .purse-state { font-size: 0.52rem; }
-.viewer-page .purse-bar { height: 5px; margin: 0; }
+.viewer-page .grid-teams { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
+
+/* Team purses -- compact live-sports tiles: logo, name, remaining purse,
+   slim bar. The currently-leading team gets a subtle highlight, nothing more. */
+.team-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid rgba(79, 103, 165, 0.26); border-radius: 6px; background: linear-gradient(145deg, rgba(13, 29, 62, 0.88), rgba(10, 21, 45, 0.84)); transition: border-color 140ms ease, background 140ms ease; }
+.team-tile.is-leading { border-color: rgba(38, 215, 125, 0.55); background: linear-gradient(145deg, rgba(13, 45, 38, 0.85), rgba(10, 30, 28, 0.85)); }
+.team-tile .team-logo { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; }
+.team-tile-main { flex: 1; min-width: 0; }
+.team-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.team-tile-name { color: #e2eaff; font-size: 0.74rem; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-tile-purse-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 3px; }
+.team-tile-purse { color: #5bc1ff; font-size: 0.8rem; font-weight: 800; }
+.team-tile-slots { color: var(--text-dim); font-size: 0.64rem; }
+.team-tile .purse-bar { height: 4px; margin: 5px 0 0; }
 
 .team-view-grid { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
 .team-view-card { overflow: hidden; border: 1px solid rgba(79, 103, 165, 0.38); border-radius: 8px; background: linear-gradient(145deg, rgba(13, 29, 62, 0.94), rgba(9, 20, 43, 0.92)); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16); }
@@ -794,39 +1325,40 @@ h1, h2, h3 { letter-spacing: 0; }
 .team-view-player strong { margin-left: 12px; color: #25df8a; font-size: 0.72rem; white-space: nowrap; }
 .team-view-empty-slot { border: 1px dashed rgba(111, 142, 199, 0.45); color: #8195b7; font-size: 0.7rem; }
 
-.team-view-player-photo { width: 28px; height: 28px; flex: 0 0 28px; margin-right: 8px; border: 1px solid rgba(116, 153, 229, 0.45); border-radius: 50%; background: #0d1d3c; object-fit: cover; }
-
-[data-theme="light"] .team-player-slots img,
-[data-theme="light"] .team-player-slots span { border-color: #acc9dd; background: #e7f1f8; }
-[data-theme="light"] .team-player-slots img { border-color: #338fc5; }
-[data-theme="light"] .team-view-player-photo { border-color: #b6d0e1; background: #e7f1f8; }
+.team-view-player-photo { width: 28px; height: 28px; flex: 0 0 28px; margin-right: 8px; border: 1px solid rgba(116, 153, 229, 0.45); border-radius: 50%; background: #0d1d3c; object-fit: cover; object-position: top center; }
 
 @media (max-width: 980px) {
-  .auction-dashboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .next-up-card { grid-column: span 2; }
-  .next-player { grid-template-columns: 74px minmax(0, 1fr); max-width: 360px; }
-  .viewer-page .leading-bid-card { flex-basis: 180px; }
+  .spotlight-bid-panel {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+  .viewer-page .spotlight.has-bid-panel {
+    flex-wrap: wrap;
+  }
+  .viewer-page .spotlight.has-bid-panel .info {
+    flex: 1 1 calc(100% - 220px);
+  }
 }
 
 @media (max-width: 760px) {
   .viewer-page .container { padding-top: 10px; }
   .viewer-page .spotlight { padding: 16px; }
   .viewer-page .spotlight-player-photo { width: 116px; height: 158px; flex-basis: 116px; }
-  .viewer-page .leading-bid-card { flex-basis: 150px; }
-  .viewer-page .leading-team-logo { width: 54px; height: 54px; }
-  .viewer-page .leading-bid-card b { font-size: 1.25rem; }
-  .viewer-page .auction-facts > div { min-width: 0; flex: 1; }
+}
+
+@media (max-width: 680px) {
+  .auction-status-strip { flex-wrap: wrap; }
+  .status-chip { flex: 1 1 40%; }
 }
 
 @media (max-width: 620px) {
   .viewer-page .spotlight { flex-direction: column; }
   .viewer-page .spotlight-player-photo { width: 100%; height: min(80vw, 280px); }
-  .viewer-page .leading-bid-card { width: 100%; min-height: 130px; }
-  .auction-dashboard { grid-template-columns: 1fr; }
-  .next-up-card { grid-column: auto; }
-  .live-news-bar { margin-inline: 0; }
+  .viewer-page .spotlight.has-bid-panel .info { flex: 1 1 auto; }
+  .spotlight-bid-panel { max-height: none; }
   .viewer-page .grid-teams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .viewer-page .purse-state { display: none; }
   .team-view-grid { grid-template-columns: 1fr; }
 }
 
@@ -838,73 +1370,90 @@ h1, h2, h3 { letter-spacing: 0; }
 .sale-celebration {
   position: fixed; inset: 0; z-index: 490;
   display: flex; align-items: center; justify-content: center;
-  padding: 20px; pointer-events: none;
+  padding: 24px;
+  pointer-events: none;
+  background: rgba(3, 8, 13, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  opacity: 0;
+  transition: opacity 260ms ease;
 }
+.sale-celebration.is-visible { opacity: 1; }
+.sale-celebration.is-leaving { opacity: 0; transition: opacity 320ms ease; }
 .sale-celebration-card {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 32px 40px; max-width: 360px; width: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 48px 56px; max-width: 560px; width: min(92vw, 560px);
   background: linear-gradient(160deg, rgba(16, 28, 40, 0.98), rgba(14, 40, 32, 0.96));
   border: 1px solid rgba(38, 215, 125, 0.55);
-  border-radius: 16px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(38, 215, 125, 0.12);
+  border-radius: 22px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(38, 215, 125, 0.12);
   text-align: center;
-  opacity: 0; transform: scale(0.82) translateY(14px);
-  transition: opacity 260ms ease, transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  opacity: 0; transform: scale(0.86) translateY(18px);
+  transition: opacity 280ms ease, transform 280ms cubic-bezier(0.2, 0.9, 0.3, 1.25);
 }
 .sale-celebration.is-visible .sale-celebration-card {
   opacity: 1; transform: scale(1) translateY(0);
 }
 .sale-celebration.is-leaving .sale-celebration-card {
-  opacity: 0; transform: scale(0.92) translateY(-8px);
+  opacity: 0; transform: scale(0.94) translateY(-10px);
   transition: opacity 320ms ease, transform 320ms ease;
 }
 .sale-celebration-tag {
-  padding: 4px 14px; border-radius: 999px;
+  padding: 7px 20px; border-radius: 999px;
   background: var(--accent); color: #05170c;
-  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
-  box-shadow: 0 0 22px rgba(38, 215, 125, 0.55);
+  font-size: 0.9rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  box-shadow: 0 0 18px rgba(38, 215, 125, 0.45);
   animation: sale-tag-pulse 1.1s ease-in-out infinite;
 }
 @keyframes sale-tag-pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+  50% { transform: scale(1.06); }
 }
 .sale-celebration-photo {
-  width: 96px; height: 96px; margin-top: 10px;
-  border-radius: 50%; object-fit: cover;
-  border: 3px solid var(--accent);
-  box-shadow: 0 0 0 6px rgba(38, 215, 125, 0.14);
+  width: 168px; height: 168px; margin-top: 12px;
+  border-radius: 50%; object-fit: contain; object-position: center;
+  padding: 8px; box-sizing: border-box; background: #0e141b;
+  border: 4px solid var(--accent);
+  box-shadow: 0 0 0 8px rgba(38, 215, 125, 0.14);
 }
-.sale-celebration-card h2 { margin: 4px 0 0; font-size: 1.5rem; color: var(--text); }
-.sale-celebration-team { color: var(--text-dim); font-size: 0.92rem; }
+.sale-celebration-card h2 { margin: 8px 0 0; font-size: clamp(1.8rem, 4vw, 2.4rem); color: var(--text); }
+.sale-celebration-team { color: var(--text-dim); font-size: 1.15rem; }
 .sale-celebration-team b { color: #57e69c; }
 .sale-celebration-price {
-  margin-top: 6px; font-size: 2rem; font-weight: 800; color: var(--accent);
+  margin-top: 8px; font-size: clamp(2.2rem, 5vw, 3.1rem); font-weight: 800; color: var(--accent);
 }
+.sale-celebration .ovr-badge {
+  position: static; width: 64px; height: 64px; margin-top: 4px; border-radius: 12px;
+}
+.sale-celebration .ovr-badge .ovr-value { font-size: 1.5rem; }
 
 @media (prefers-reduced-motion: reduce) {
+  .sale-celebration,
   .sale-celebration-card,
   .sale-celebration.is-visible .sale-celebration-card,
   .sale-celebration.is-leaving .sale-celebration-card { transition: opacity 200ms ease; transform: none; }
   .sale-celebration-tag { animation: none; }
+  .bid-pulse { animation: none; }
+  .call-banner { animation: none; }
 }
 
 @media (max-width: 680px) {
-  .sale-celebration-card { padding: 26px 22px; }
-  .sale-celebration-price { font-size: 1.6rem; }
+  .sale-celebration-card { padding: 34px 22px; }
+  .sale-celebration-photo { width: 132px; height: 132px; }
+  .sale-celebration-price { font-size: 2rem; }
 }
 
 /* ---------- FIFA-style player cards ---------- */
 /* Tier is derived from the computed "overall" rating (see backend enrich_player /
    admin.js & viewer.js's cardTierClass): <65 bronze, 65-74 silver, >=75 gold.
-   .fifa-card is layered onto .player-card and .spotlight so both keep their
-   existing layout/behavior and just pick up a tier-tinted border + glow plus
-   the OVR badge / stat grid markup. */
+   .fifa-card is layered onto .player-card, .spotlight and .next-player so
+   they all keep their existing layout/behavior and just pick up a
+   tier-tinted border plus the OVR badge / stat markup. */
 .fifa-card { position: relative; overflow: visible; }
 .fifa-card.card-bronze { border-color: rgba(205, 127, 50, 0.55); box-shadow: 0 0 0 1px rgba(205, 127, 50, 0.12); }
 .fifa-card.card-silver { border-color: rgba(192, 200, 210, 0.6); box-shadow: 0 0 0 1px rgba(192, 200, 210, 0.16); }
-.fifa-card.card-gold { border-color: rgba(255, 200, 60, 0.7); box-shadow: 0 0 0 1px rgba(255, 200, 60, 0.2), 0 0 18px rgba(255, 200, 60, 0.1); }
-.player-card.fifa-card:hover.card-gold { box-shadow: 0 0 0 1px rgba(255, 200, 60, 0.28), 0 12px 26px rgba(255, 200, 60, 0.14); }
+.fifa-card.card-gold { border-color: rgba(255, 200, 60, 0.7); box-shadow: 0 0 0 1px rgba(255, 200, 60, 0.18), 0 0 10px rgba(255, 200, 60, 0.08); }
+.player-card.fifa-card:hover.card-gold { box-shadow: 0 0 0 1px rgba(255, 200, 60, 0.26), 0 12px 26px rgba(255, 200, 60, 0.12); }
 
 .ovr-badge {
   position: absolute; top: 8px; left: 8px; z-index: 2;
@@ -938,15 +1487,12 @@ h1, h2, h3 { letter-spacing: 0; }
 .stat-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; }
 .stat-label { color: var(--text-dim); font-weight: 700; letter-spacing: 0.04em; }
 .stat-value { color: var(--text); font-weight: 800; }
-.spotlight .stat-grid { grid-template-columns: repeat(6, 1fr); max-width: 420px; }
-.spotlight .stat-item { flex-direction: column; align-items: flex-start; gap: 1px; }
 
 .card-stat-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .card-stat-inputs .field { margin-bottom: 0; }
 .card-stat-inputs input { padding: 7px 8px; text-align: center; }
 
 @media (max-width: 680px) {
-  .spotlight .stat-grid { grid-template-columns: repeat(3, 1fr); }
   .card-stat-inputs { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -1006,16 +1552,22 @@ h1, h2, h3 { letter-spacing: 0; }
   border-color: rgba(8, 127, 198, 0.3);
   box-shadow: 0 14px 30px rgba(31, 74, 108, 0.12);
 }
+[data-theme="light"] .auction-timer {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(31, 74, 108, 0.18);
+}
+[data-theme="light"] .auction-timer-value { color: #132236; }
+[data-theme="light"] .auction-timer.is-urgent {
+  background: rgba(255, 236, 238, 0.95);
+  border-color: rgba(220, 60, 72, 0.35);
+}
+[data-theme="light"] .sale-celebration {
+  background: rgba(247, 250, 252, 0.45);
+}
 [data-theme="light"] .viewer-page .spotlight .info h2,
-[data-theme="light"] .viewer-page .leading-bid-card strong,
 [data-theme="light"] .team-view-header h3,
 [data-theme="light"] .team-view-purse strong,
 [data-theme="light"] .team-purse-chart span { color: #132236; }
-[data-theme="light"] .viewer-page .auction-facts > div { background: #f4f9fc; border-color: #c9ddea; }
-[data-theme="light"] .viewer-page .leading-bid-card { background: linear-gradient(180deg, #f4fbff, #e7f3fb); border-color: #b7d6e8; }
-[data-theme="light"] .viewer-page .leading-bid-empty { background: #fff9ed; border-color: #efd293; }
-[data-theme="light"] .live-news-bar { background: linear-gradient(90deg, #fff1f3, #f9fbff); }
-[data-theme="light"] #liveNewsContent { color: #465f74; }
 [data-theme="light"] .dashboard-card,
 [data-theme="light"] .viewer-page .team-card,
 [data-theme="light"] .team-view-card { background: linear-gradient(145deg, #ffffff, #f0f7fb); border-color: #c3d8e7; box-shadow: 0 10px 22px rgba(31, 74, 108, 0.09); }
@@ -1023,11 +1575,12 @@ h1, h2, h3 { letter-spacing: 0; }
 [data-theme="light"] .team-view-header { border-color: #d6e4ed; }
 [data-theme="light"] .dashboard-heading h2,
 [data-theme="light"] .viewer-page .section-heading.compact h2,
-[data-theme="light"] .viewer-page .team-name { color: #19354e; }
-[data-theme="light"] .overview-stats > div,
+[data-theme="light"] .team-tile-name { color: #19354e; }
+[data-theme="light"] .status-chip,
 [data-theme="light"] .viewer-page .bid-history-item,
-[data-theme="light"] .team-view-player { background: #f3f8fc; border-color: #d4e2ec; color: #1c354b; }
-[data-theme="light"] .overview-stats span,
+[data-theme="light"] .team-view-player,
+[data-theme="light"] .team-tile { background: #f3f8fc; border-color: #d4e2ec; color: #1c354b; }
+[data-theme="light"] .status-chip span,
 [data-theme="light"] .team-view-header span,
 [data-theme="light"] .team-view-purse > div:last-child > span,
 [data-theme="light"] .team-view-purse small,
@@ -1038,9 +1591,175 @@ h1, h2, h3 { letter-spacing: 0; }
 [data-theme="light"] .next-player small { color: #587188; }
 [data-theme="light"] .team-view-purse-chart::before { background: #f0f7fb; }
 [data-theme="light"] .team-view-empty-slot { border-color: #a9c2d2; color: #647d91; }
-[data-theme="light"] .viewer-page .purse-details > span { color: #2d4a61; }
+[data-theme="light"] .manager-signings-table td { color: #19354e; }
+[data-theme="light"] .manager-bench-chip,
+[data-theme="light"] .manager-signing { background: #f3f8fc; border-color: #d4e2ec; color: #1c354b; }
+[data-theme="light"] .ticker-primary { border-right-color: var(--border); }
+[data-theme="light"] .result-team { color: var(--text-dim); }
 
 @media (max-width: 680px) {
   .theme-toggle { min-width: auto; }
   .login-theme-toggle { top: 10px; right: 10px; }
+}
+
+/* ---------- Slot-machine player reveal (viewer, horizontal) ---------- */
+body.pack-reveal-open { overflow: hidden; }
+
+.pack-reveal {
+  position: fixed; inset: 0; z-index: 520;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 14, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms ease;
+}
+.pack-reveal.is-visible { opacity: 1; pointer-events: auto; }
+.pack-reveal.is-leaving { opacity: 0; transition: opacity 420ms ease; }
+
+.pack-reveal-stage.slot-stage {
+  position: relative;
+  width: min(96vw, 720px);
+  height: min(78vh, 420px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.pack-reveal-label,
+.pack-reveal-caption {
+  position: absolute; left: 0; right: 0; text-align: center;
+  font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(230, 240, 255, 0.78);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 280ms ease, transform 280ms ease;
+}
+.pack-reveal-label { top: 0; font-size: 0.72rem; }
+.pack-reveal-caption { bottom: 0; font-size: 0.78rem; color: #9fd0ff; }
+.pack-reveal.is-visible .pack-reveal-label { opacity: 1; transform: translateY(0); }
+.pack-reveal.is-landed .pack-reveal-label,
+.pack-reveal.is-hold .pack-reveal-label { opacity: 0; }
+.pack-reveal.is-landed .pack-reveal-caption,
+.pack-reveal.is-hold .pack-reveal-caption { opacity: 1; transform: translateY(0); }
+
+.slot-machine {
+  width: 100%;
+  display: flex; justify-content: center;
+  filter: drop-shadow(0 24px 40px rgba(0, 0, 0, 0.55));
+}
+.slot-window {
+  position: relative;
+  width: min(100%, 444px); /* 3 visible cards */
+  height: 236px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 2px solid rgba(120, 170, 255, 0.4);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(70, 120, 255, 0.2), transparent 55%),
+    linear-gradient(180deg, #0a1424, #101c30 50%, #0a1424);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.slot-pointer {
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 148px; margin-left: -74px; z-index: 3;
+  border-left: 2px solid rgba(87, 230, 156, 0.55);
+  border-right: 2px solid rgba(87, 230, 156, 0.55);
+  box-shadow: inset 0 0 24px rgba(87, 230, 156, 0.08);
+  pointer-events: none;
+}
+.slot-fade {
+  position: absolute; top: 0; bottom: 0; z-index: 2; width: 72px;
+  pointer-events: none;
+}
+.slot-fade-left { left: 0; background: linear-gradient(90deg, rgba(8, 14, 26, 0.95), transparent); }
+.slot-fade-right { right: 0; background: linear-gradient(270deg, rgba(8, 14, 26, 0.95), transparent); }
+
+.slot-reel {
+  position: absolute; top: 0; bottom: 0; left: 148px; /* center first card */
+  display: flex; flex-direction: row; align-items: stretch;
+  height: 100%;
+  will-change: transform;
+}
+.slot-tile {
+  flex: 0 0 148px;
+  width: 148px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 10px;
+  box-sizing: border-box;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(16, 28, 46, 0.55);
+  text-align: center;
+}
+.slot-tile.card-bronze { background: linear-gradient(180deg, rgba(80, 45, 18, 0.55), rgba(16, 28, 46, 0.35)); }
+.slot-tile.card-silver { background: linear-gradient(180deg, rgba(70, 80, 95, 0.5), rgba(16, 28, 46, 0.35)); }
+.slot-tile.card-gold { background: linear-gradient(180deg, rgba(90, 70, 18, 0.55), rgba(16, 28, 46, 0.35)); }
+
+.slot-tile-photo {
+  width: 72px; height: 88px;
+  border-radius: 8px;
+  object-fit: contain; object-position: center;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.slot-tile-ovr {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; padding: 2px 6px;
+  border-radius: 5px; font-size: 0.72rem; font-weight: 900;
+  background: rgba(255, 255, 255, 0.1); color: #eef4ff;
+}
+.slot-tile.card-bronze .slot-tile-ovr { background: linear-gradient(160deg, #cd7f32, #8a5322); }
+.slot-tile.card-silver .slot-tile-ovr { background: linear-gradient(160deg, #e4e9ee, #a9b3bd); color: #1a2330; }
+.slot-tile.card-gold .slot-tile-ovr { background: linear-gradient(160deg, #ffe18a, #d99a1b); color: #2b1c00; }
+.slot-tile-name {
+  max-width: 100%;
+  font-size: 0.86rem; font-weight: 800; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.slot-tile-role {
+  font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: rgba(210, 225, 255, 0.65);
+}
+.slot-tile-price {
+  font-size: 0.78rem; font-weight: 800; color: #57e69c;
+  opacity: 0; transform: scale(0.9);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.pack-reveal.is-spinning .slot-window {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 0 28px rgba(70, 130, 255, 0.2);
+}
+.pack-reveal.is-landed .slot-tile.is-winner.is-locked,
+.pack-reveal.is-hold .slot-tile.is-winner.is-locked {
+  background: linear-gradient(180deg, rgba(38, 215, 125, 0.22), rgba(16, 28, 46, 0.55));
+  box-shadow: inset 0 0 0 1px rgba(87, 230, 156, 0.45);
+  animation: slot-winner-pulse 1s ease-in-out infinite;
+}
+.pack-reveal.is-landed .slot-tile.is-winner .slot-tile-price,
+.pack-reveal.is-hold .slot-tile.is-winner .slot-tile-price {
+  opacity: 1; transform: scale(1);
+}
+@keyframes slot-winner-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
+.settings-toggle {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-weight: 700; cursor: pointer;
+}
+.settings-toggle input { width: 18px; height: 18px; }
+
+@media (max-width: 680px) {
+  .slot-window { width: min(100%, 296px); }
+  .slot-tile-name { font-size: 0.78rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-reveal,
+  .pack-reveal-label,
+  .pack-reveal-caption,
+  .slot-reel { transition: none !important; animation: none !important; }
 }

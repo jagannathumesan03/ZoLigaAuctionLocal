@@ -1,4 +1,18 @@
-let state = { players: [], teams: [], currentAuction: null, selectedBidTeamId: null, lastAuctionPlayerId: null };
+let state = {
+  players: [], teams: [], currentAuction: null, selectedBidTeamId: null, lastAuctionPlayerId: null,
+  callState: null, // { call: 'going_once' | 'going_twice', playerId, expiresAt } -- ephemeral, never persisted
+  auctionTimerSeconds: 120,
+  auctionTimerEnabled: true,
+  waitingBackgroundUrl: '',
+  startingAuction: false,
+  draftBidAmount: null,
+  draftBidAuctionId: null,
+  draftBidFloor: null,
+};
+
+// Tracks whether we've finished the first paint so a mid-session player
+// change can fire the pack-reveal animation (same as viewer).
+let auctionBaselineReady = false;
 
 // ---------- Auth guard ----------
 (async function guard() {
@@ -54,17 +68,31 @@ async function apiFetch(url, options = {}) {
 
 // ---------- Init / data load ----------
 async function init() {
-  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
+  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction(), loadSettings()]);
+  state.lastAuctionPlayerId = state.currentAuction ? state.currentAuction.id : null;
+  auctionBaselineReady = true;
   renderAll();
   connectSSE();
 
-  document.getElementById('auctionSearch').addEventListener('input', renderAuctionList);
   document.getElementById('playerSearch').addEventListener('input', renderPlayersList);
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
 
   document.getElementById('playerForm').addEventListener('submit', submitPlayerForm);
   document.getElementById('teamForm').addEventListener('submit', submitTeamForm);
   document.getElementById('assignForm').addEventListener('submit', submitAssignForm);
+  document.getElementById('settingsForm').addEventListener('submit', submitSettingsForm);
+  document.getElementById('timerEnabled').addEventListener('change', () => {
+    state.auctionTimerEnabled = !!document.getElementById('timerEnabled').checked;
+    fillSettingsForm();
+  });
+
+  setInterval(() => {
+    document.querySelectorAll('[data-ts]').forEach(el => {
+      const ts = el.getAttribute('data-ts');
+      if (ts) el.textContent = relativeTime(ts);
+    });
+  }, 5000);
+  setInterval(tickAuctionTimer, 250);
 }
 
 async function loadPlayers() {
@@ -79,14 +107,132 @@ async function loadCurrentAuction() {
   if (newId !== state.lastAuctionPlayerId) {
     // a different player (or no player) is now up for auction — clear the stale team selection
     state.selectedBidTeamId = null;
-    state.lastAuctionPlayerId = newId;
   }
+}
+
+async function loadSettings() {
+  const data = await apiFetch('/api/settings');
+  state.auctionTimerSeconds = data.auction_timer_seconds || 120;
+  state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+  state.waitingBackgroundUrl = data.waiting_background_url || '';
+  fillSettingsForm();
+}
+
+function fillSettingsForm() {
+  const total = state.auctionTimerSeconds || 120;
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  const minutesEl = document.getElementById('timerMinutes');
+  const secondsEl = document.getElementById('timerSeconds');
+  const enabledEl = document.getElementById('timerEnabled');
+  const durationFields = document.getElementById('timerDurationFields');
+  if (minutesEl) minutesEl.value = minutes;
+  if (secondsEl) secondsEl.value = seconds;
+  if (enabledEl) enabledEl.checked = !!state.auctionTimerEnabled;
+  if (durationFields) durationFields.style.opacity = state.auctionTimerEnabled ? '1' : '0.45';
+  if (minutesEl) minutesEl.disabled = !state.auctionTimerEnabled;
+  if (secondsEl) secondsEl.disabled = !state.auctionTimerEnabled;
+  renderWaitingBgPreview();
+}
+
+function renderWaitingBgPreview() {
+  const preview = document.getElementById('waitingBgPreview');
+  const empty = document.getElementById('waitingBgEmpty');
+  const clearBtn = document.getElementById('waitingBgClearBtn');
+  if (!preview) return;
+  const url = state.waitingBackgroundUrl;
+  if (url) {
+    preview.style.backgroundImage = `url("${url}")`;
+    preview.classList.add('has-image');
+    if (empty) empty.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = '';
+  } else {
+    preview.style.backgroundImage = '';
+    preview.classList.remove('has-image');
+    if (empty) empty.style.display = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+}
+
+async function submitSettingsForm(e) {
+  e.preventDefault();
+  const enabled = !!document.getElementById('timerEnabled').checked;
+  const minutes = parseInt(document.getElementById('timerMinutes').value, 10) || 0;
+  const seconds = parseInt(document.getElementById('timerSeconds').value, 10) || 0;
+  const total = Math.max(5, minutes * 60 + seconds);
+  const status = document.getElementById('settingsStatus');
+  try {
+    const data = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auction_timer_seconds: total,
+        auction_timer_enabled: enabled,
+      }),
+    });
+    state.auctionTimerSeconds = data.auction_timer_seconds;
+    state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+    state.waitingBackgroundUrl = data.waiting_background_url || state.waitingBackgroundUrl;
+    fillSettingsForm();
+    status.textContent = enabled
+      ? 'Saved — timer applies to the next player put up for auction.'
+      : 'Saved — auction timer is disabled.';
+    toast(enabled ? 'Auction timer updated' : 'Auction timer disabled');
+    if (state.currentAuction) {
+      await loadCurrentAuction();
+      renderSpotlight();
+    }
+  } catch (err) {
+    status.textContent = '';
+    toast(err.message, true);
+  }
+}
+
+async function uploadWaitingBackground(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const form = new FormData();
+  form.append('photo', file);
+  try {
+    const res = await fetch('/api/settings/waiting-background', { method: 'POST', body: form });
+    if (!res.ok) {
+      let detail = 'Upload failed';
+      try { detail = (await res.json()).detail || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    state.waitingBackgroundUrl = data.waiting_background_url || '';
+    renderWaitingBgPreview();
+    renderSpotlight();
+    toast('Waiting desk background updated');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function clearWaitingBackground() {
+  try {
+    const data = await apiFetch('/api/settings/waiting-background', { method: 'DELETE' });
+    state.waitingBackgroundUrl = data.waiting_background_url || '';
+    renderWaitingBgPreview();
+    renderSpotlight();
+    toast('Waiting desk background removed');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+function waitingSpotlightStyle() {
+  const url = state.waitingBackgroundUrl;
+  if (!url) return '';
+  return ` style="--waiting-bg-image: url('${String(url).replace(/'/g, "\\'")}')"`;
 }
 
 function renderAll() {
   renderSpotlight();
   renderBidPanel();
-  renderAuctionList();
+  renderAuctionControls();
   renderPlayersList();
   renderTeamsList();
 }
@@ -97,9 +243,23 @@ let knownSoldPlayerIds = null;
 function connectSSE() {
   const es = new EventSource('/api/events');
   const refresh = async () => {
+    state.callState = null;
+    const previousAuctionId = state.lastAuctionPlayerId;
     await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
     detectAndCelebrateSales();
+    const nextAuctionId = state.currentAuction ? state.currentAuction.id : null;
+    const shouldReveal = auctionBaselineReady
+      && nextAuctionId
+      && nextAuctionId !== previousAuctionId
+      && typeof window.playPackReveal === 'function';
+    state.lastAuctionPlayerId = nextAuctionId;
     renderAll();
+    if (shouldReveal) {
+      window.playPackReveal(state.currentAuction, {
+        candidates: state.players,
+        onDone: () => renderSpotlight(),
+      });
+    }
   };
   es.addEventListener('current_player', refresh);
   es.addEventListener('bid_updated', refresh);
@@ -107,6 +267,22 @@ function connectSSE() {
   es.addEventListener('player_unsold', refresh);
   es.addEventListener('player_reset', refresh);
   es.addEventListener('team_updated', refresh);
+  es.addEventListener('timer_paused', refresh);
+  es.addEventListener('timer_resumed', refresh);
+  es.addEventListener('auction_call', (e) => {
+    try { setCallState(JSON.parse(e.data)); } catch (err) { /* ignore malformed payload */ }
+  });
+  es.addEventListener('settings_updated', async (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      state.auctionTimerSeconds = data.auction_timer_seconds || state.auctionTimerSeconds;
+      state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+      state.waitingBackgroundUrl = data.waiting_background_url || '';
+      fillSettingsForm();
+      if (state.currentAuction) await loadCurrentAuction();
+      renderSpotlight();
+    } catch (err) { /* ignore */ }
+  });
   es.onopen = () => setConnectionStatus(true);
   es.onerror = () => setConnectionStatus(false);
 
@@ -134,41 +310,236 @@ function detectAndCelebrateSales() {
   knownSoldPlayerIds = currentSoldIds;
 }
 
+// ---------- Ephemeral auctioneer call ("Going once" / "Going twice") ----------
+// Broadcast-only, never persisted -- see backend/routers/auction.py's /call
+// endpoint. Cleared automatically after a few seconds, or immediately once a
+// new bid/sale/reset event arrives (handled in connectSSE's refresh()).
+function setCallState(data) {
+  state.callState = { call: data.call, playerId: data.player_id, expiresAt: Date.now() + 4000 };
+  renderSpotlight();
+  setTimeout(() => {
+    if (state.callState && state.callState.expiresAt <= Date.now()) {
+      state.callState = null;
+      renderSpotlight();
+    }
+  }, 4100);
+}
+function activeCallState() {
+  if (!state.callState) return null;
+  if (state.callState.expiresAt <= Date.now()) { state.callState = null; return null; }
+  return state.callState;
+}
+function callBannerHtml(call) {
+  const isTwice = call.call === 'going_twice';
+  return `<div class="call-banner ${isTwice ? 'is-twice' : 'is-once'}">${isTwice ? 'Going twice' : 'Going once'}</div>`;
+}
+async function announceCall(call) {
+  const current = state.currentAuction;
+  if (!current) return;
+  if (!current.current_bid_team_id) {
+    toast('Place a bid for a team before calling going once / twice', true);
+    return;
+  }
+  try {
+    await apiFetch('/api/auction/call', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: current.id, call }),
+    });
+  } catch (e) { toast(e.message, true); }
+}
+function markGoingOnce() { announceCall('going_once'); }
+function markGoingTwice() { announceCall('going_twice'); }
+
+// ---------- Auction countdown ----------
+function remainingMs(endsAt) {
+  if (!endsAt) return null;
+  const end = Date.parse(endsAt);
+  if (Number.isNaN(end)) return null;
+  return end - Date.now();
+}
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function auctionClockMs(player) {
+  if (!player) return null;
+  if (player.auction_timer_paused) {
+    const remaining = player.auction_remaining_seconds;
+    if (remaining === null || remaining === undefined) return null;
+    return Math.max(0, Number(remaining) * 1000);
+  }
+  if (!player.auction_ends_at) return null;
+  const end = Date.parse(player.auction_ends_at);
+  if (Number.isNaN(end)) return null;
+  // Freeze the displayed auction time until the pack-reveal window ends.
+  let effectiveNow = Date.now();
+  if (player.auction_reveal_until) {
+    const revealUntil = Date.parse(player.auction_reveal_until);
+    if (!Number.isNaN(revealUntil) && effectiveNow < revealUntil) {
+      effectiveNow = revealUntil;
+    }
+  }
+  return end - effectiveNow;
+}
+
+function isAuctionRevealing(player) {
+  if (!player || player.auction_timer_paused || !player.auction_reveal_until) return false;
+  const revealUntil = Date.parse(player.auction_reveal_until);
+  return !Number.isNaN(revealUntil) && Date.now() < revealUntil;
+}
+
+function auctionTimerHtml(player) {
+  if (!player) return '';
+  const paused = !!player.auction_timer_paused;
+  const hasClock = paused || !!player.auction_ends_at;
+  if (!hasClock) return '';
+  const revealing = isAuctionRevealing(player);
+  const ms = auctionClockMs(player);
+  if (ms === null) return '';
+  const urgent = !paused && !revealing && ms <= 15000;
+  let attrs = '';
+  if (paused) {
+    attrs = ` data-paused="1" data-remaining-ms="${Math.round(ms)}"`;
+  } else {
+    attrs = ` data-ends-at="${escapeHtml(player.auction_ends_at || '')}"`;
+    if (player.auction_reveal_until) {
+      attrs += ` data-reveal-until="${escapeHtml(player.auction_reveal_until)}"`;
+    }
+  }
+  const label = paused ? 'Paused' : (revealing ? 'Get ready' : 'Time left');
+  return `
+    <div class="auction-timer${urgent ? ' is-urgent' : ''}${paused ? ' is-paused' : ''}${revealing ? ' is-revealing' : ''}"${attrs} aria-live="polite">
+      <span class="auction-timer-label">${label}</span>
+      <span class="auction-timer-value">${formatCountdown(ms)}</span>
+    </div>`;
+}
+
+function tickAuctionTimer() {
+  document.querySelectorAll('.auction-timer').forEach(el => {
+    if (el.getAttribute('data-paused') === '1') return;
+    const endsAt = el.getAttribute('data-ends-at');
+    if (!endsAt) return;
+    const revealUntil = el.getAttribute('data-reveal-until');
+    let effectiveNow = Date.now();
+    let revealing = false;
+    if (revealUntil) {
+      const revealMs = Date.parse(revealUntil);
+      if (!Number.isNaN(revealMs) && effectiveNow < revealMs) {
+        effectiveNow = revealMs;
+        revealing = true;
+      }
+    }
+    const end = Date.parse(endsAt);
+    if (Number.isNaN(end)) return;
+    const ms = end - effectiveNow;
+    const value = el.querySelector('.auction-timer-value');
+    const label = el.querySelector('.auction-timer-label');
+    if (value) value.textContent = formatCountdown(ms);
+    if (label) label.textContent = revealing ? 'Get ready' : 'Time left';
+    el.classList.toggle('is-revealing', revealing);
+    el.classList.toggle('is-urgent', !revealing && ms <= 15000);
+  });
+}
+
+async function pauseAuctionTimer() {
+  try {
+    state.currentAuction = await apiFetch('/api/auction/timer/pause', { method: 'POST' });
+    renderSpotlight();
+    toast('Timer paused');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function resumeAuctionTimer() {
+  try {
+    state.currentAuction = await apiFetch('/api/auction/timer/resume', { method: 'POST' });
+    renderSpotlight();
+    toast('Timer resumed');
+  } catch (e) { toast(e.message, true); }
+}
+
 // ---------- Spotlight ----------
+// The hero of the operator screen too -- name and current bid dominate;
+// everything else (base price, leading team, stats) supports them.
+function previousBidInfo(current) {
+  const history = current.history || [];
+  if (history.length >= 2) {
+    const prev = history[history.length - 2];
+    return { amount: prev.amount, teamName: prev.team_name || 'Unknown team', teamId: prev.team_id };
+  }
+  if (history.length === 1) {
+    return { amount: current.base_price, teamName: 'Starting bid', teamId: null };
+  }
+  return null;
+}
+
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
   const current = state.currentAuction;
   document.getElementById('bidPanelWrapper').style.display = current ? 'block' : 'none';
   if (!current) {
-    container.innerHTML = `<div class="empty-state">No player currently up for auction. Pick one below.</div>`;
+    const hasBg = !!state.waitingBackgroundUrl;
+    container.innerHTML = `
+      <div class="spotlight spotlight-waiting${hasBg ? ' has-waiting-bg' : ''}"${waitingSpotlightStyle()}>
+        <div class="empty-state">
+          <p class="eyebrow">Auction desk</p>
+          <h2>No player currently up for auction</h2>
+          <p class="muted">Press Start auction to draw a random player from the pool.</p>
+        </div>
+      </div>`;
     return;
   }
   const bidAmount = current.current_bid_amount || current.base_price;
-  const previousBid = current.history && current.history.length > 1
-    ? current.history[current.history.length - 2].amount
-    : current.base_price;
-  const nextBid = bidAmount + tierIncrement(bidAmount);
-  const bidCount = current.history ? current.history.length : 0;
+  const hasBids = !!current.current_bid_team_id;
+  const leadingTeam = state.teams.find(team => team.id === current.current_bid_team_id);
+  const previous = previousBidInfo(current);
+  const hasHistory = (current.history || []).length > 0;
+  const call = activeCallState();
   container.innerHTML = `
     <div class="spotlight fifa-card ${cardTierClass(current.card_tier)}">
+      ${call ? callBannerHtml(call) : ''}
       ${ovrBadgeHtml(current)}
-      <img src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      ${auctionTimerHtml(current)}
+      <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
       <div class="info">
-        <span class="badge badge-auction">Up for auction</span>
+        <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
-        <div class="muted spotlight-base-price">Base price: ${fmtMoney(current.base_price)}</div>
-        <div class="bid-amount-display" aria-live="polite">${fmtMoney(bidAmount)}</div>
-        <div class="bid-leading">${current.current_bid_team_name ? `Leading team: <b>${escapeHtml(current.current_bid_team_name)}</b>` : 'No bids yet — starting at base price'}</div>
-        <div class="auction-facts">
-          <div><span>Previous bid</span><strong>${fmtMoney(previousBid)}</strong></div>
-          <div><span>Next minimum</span><strong>${fmtMoney(nextBid)}</strong></div>
-          <div><span>Bid activity</span><strong>${bidCount} ${bidCount === 1 ? 'bid' : 'bids'}</strong></div>
+        <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
+        <div class="current-bid-block">
+          <span class="eyebrow">Highest live bid</span>
+          <div class="bid-amount-display" aria-live="polite">${fmtMoney(bidAmount)}</div>
         </div>
-        ${statGridHtml(current)}
+        <div class="leading-team-row${hasBids ? ' has-leader' : ''}">
+          ${hasBids
+            ? `<img class="mini-team-logo" src="${leadingTeam && leadingTeam.logo_url ? leadingTeam.logo_url : placeholderImg()}" alt="">
+               <span class="leading-team-name">${escapeHtml(current.current_bid_team_name || 'Unknown team')}</span>
+               <span class="leading-chip">Leading</span>`
+            : `<span class="muted">No bids yet — starting at base price</span>`}
+        </div>
+        ${previous
+          ? `<div class="previous-bid-row">
+               <span class="eyebrow">Previous bid</span>
+               <strong>${fmtMoney(previous.amount)}</strong>
+               <span class="muted">${escapeHtml(previous.teamName)}</span>
+             </div>`
+          : ''}
+        ${statBarsHtml(current)}
         ${current.stats ? `<p class="muted">${escapeHtml(current.stats)}</p>` : ''}
         <div class="player-actions">
+          <button class="btn btn-primary btn-sm" type="button" onclick="sellToLeader()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Sell</button>
+          <button class="btn btn-sm" type="button" onclick="undoLastBid()" ${hasHistory ? '' : 'disabled title="No bids to undo"'}>Undo bid</button>
           <button class="btn btn-warn btn-sm" type="button" onclick="markUnsold(${current.id})">Mark unsold</button>
+          <button class="btn btn-sm" type="button" onclick="markGoingOnce()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Going once</button>
+          <button class="btn btn-sm" type="button" onclick="markGoingTwice()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Going twice</button>
+          ${(current.auction_ends_at || current.auction_timer_paused)
+            ? (current.auction_timer_paused
+              ? `<button class="btn btn-primary btn-sm" type="button" onclick="resumeAuctionTimer()">Resume timer</button>`
+              : `<button class="btn btn-sm" type="button" onclick="pauseAuctionTimer()">Pause timer</button>`)
+            : ''}
         </div>
       </div>
     </div>`;
@@ -183,93 +554,141 @@ function tierIncrement(amount) {
   return 250000;
 }
 
+function syncDraftBidAmount(current) {
+  const bidAmount = current.current_bid_amount || current.base_price;
+  const nextAmount = bidAmount + tierIncrement(bidAmount);
+  const needsReset = state.draftBidAuctionId !== current.id
+    || state.draftBidFloor !== bidAmount
+    || !state.draftBidAmount
+    || state.draftBidAmount <= bidAmount;
+  if (needsReset) {
+    state.draftBidAmount = nextAmount;
+    state.draftBidAuctionId = current.id;
+    state.draftBidFloor = bidAmount;
+  }
+  return { bidAmount, nextAmount, draftAmount: state.draftBidAmount };
+}
+
 function renderBidPanel() {
   const wrapper = document.getElementById('bidPanel');
   const current = state.currentAuction;
-  if (!current) { wrapper.innerHTML = ''; return; }
-
-  // default the selection to whoever is currently leading, if the admin hasn't picked yet
-  if (!state.selectedBidTeamId && current.current_bid_team_id) {
-    state.selectedBidTeamId = current.current_bid_team_id;
+  if (!current) {
+    wrapper.innerHTML = '';
+    state.draftBidAmount = null;
+    state.draftBidAuctionId = null;
+    state.draftBidFloor = null;
+    return;
   }
 
-  const bidAmount = current.current_bid_amount || current.base_price;
+  const { bidAmount, nextAmount, draftAmount } = syncDraftBidAmount(current);
   const inc = tierIncrement(bidAmount);
-  const tiers = [inc, inc * 2, inc * 5];
-  const eligibleTeams = state.teams.filter(t => t.squad.length < t.slots_max);
+  const hasBids = !!current.current_bid_team_id;
+  const hasHistory = (current.history || []).length > 0;
 
-  const teamButtonsHtml = state.teams.map(t => {
+  const teamTilesHtml = state.teams.map(t => {
     const full = t.squad.length >= t.slots_max;
-    const active = state.selectedBidTeamId === t.id;
-    return `<button type="button" class="btn team-bid-btn ${active ? 'active' : ''}" aria-pressed="${active}" ${full ? 'disabled' : ''} onclick="selectBidTeam(${t.id})">
-      ${escapeHtml(t.name)}${full ? ' <small>(full)</small>' : ''}
-    </button>`;
+    const cantAfford = t.purse_remaining < draftAmount;
+    const leading = current.current_bid_team_id === t.id;
+    const disabled = full || cantAfford;
+    const reason = full ? 'Squad full' : (cantAfford ? 'Insufficient purse' : `Bid ${fmtMoney(draftAmount)}`);
+    const pct = t.purse_total ? Math.max(0, Math.min(100, Math.round((t.purse_remaining / t.purse_total) * 100))) : 0;
+    return `
+      <button type="button"
+        class="auction-team-tile${leading ? ' is-leading' : ''}${disabled ? ' is-disabled' : ''}"
+        ${disabled ? 'disabled' : ''}
+        onclick="oneClickBid(${t.id})"
+        title="${escapeHtml(reason)}">
+        <img class="auction-team-tile-logo" src="${t.logo_url || placeholderImg()}" alt="">
+        <div class="auction-team-tile-main">
+          <strong class="auction-team-tile-name">${escapeHtml(t.name)}</strong>
+          <span class="auction-team-tile-meta">${t.squad.length}/${t.slots_max} slots · ${fmtMoney(t.purse_remaining)}</span>
+          <span class="purse-bar"><span class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></span></span>
+          <span class="auction-team-tile-action">${disabled ? reason : fmtMoney(draftAmount)}</span>
+        </div>
+      </button>`;
   }).join('');
 
-  const tierButtonsHtml = tiers.map(delta => `
-    <button type="button" class="btn bid-tier-btn" ${eligibleTeams.length ? '' : 'disabled'} onclick="quickBid(${delta})">
-      ${fmtMoney(bidAmount + delta)}
-      <small>+${fmtMoney(delta)}</small>
-    </button>
-  `).join('');
-
-  const historyHtml = current.history && current.history.length
-    ? current.history.map(h => `
-        <div class="bid-history-item">
-          <span>${escapeHtml(h.team_name || 'Unknown team')}</span>
+  const bidHistoryItems = [...(current.history || [])].reverse().map((h, index) => `
+        <div class="bid-history-item${index === 0 ? ' is-current' : ''}">
+          <span class="bid-history-team">
+            <img src="${bidTeamLogo(h.team_id)}" alt="">
+            ${escapeHtml(h.team_name || 'Unknown team')}
+          </span>
           <span class="player-price">${fmtMoney(h.amount)}</span>
-        </div>`).join('')
-    : `<div class="bid-history-empty">No bids placed yet for this player.</div>`;
+          <span class="bid-history-time" data-ts="${h.created_at || ''}">${relativeTime(h.created_at)}</span>
+        </div>`).join('');
+  const startingBidItem = `
+        <div class="bid-history-item bid-history-start${!hasHistory ? ' is-current' : ''}">
+          <span class="bid-history-team">Starting bid</span>
+          <span class="player-price">${fmtMoney(current.base_price)}</span>
+          <span class="bid-history-time"></span>
+        </div>`;
 
   wrapper.innerHTML = `
-    <div class="bid-summary"><span>Current bid</span><strong>${fmtMoney(bidAmount)}</strong><span>Minimum next bid: ${fmtMoney(bidAmount + inc)}</span></div>
-    <label>Choose the bidding team</label>
-    <div class="bid-team-buttons">${teamButtonsHtml}</div>
-    <label>Quick raise</label>
-    <div class="bid-tier-buttons">${tierButtonsHtml}</div>
-    <label>Custom increment (1 - 1,000,000)</label>
-    <div class="bid-stepper">
-      <input type="number" id="bidCustomIncrement" min="1" max="1000000" value="10000">
-      <button type="button" class="btn btn-primary btn-sm" ${eligibleTeams.length ? '' : 'disabled'} onclick="customBid()">+ Add to bid</button>
+    <div class="bid-summary">
+      <span>Highest live bid</span>
+      <strong>${fmtMoney(bidAmount)}</strong>
+      <span>Minimum next: ${fmtMoney(nextAmount)}</span>
     </div>
-    <label>Bid history</label>
-    <div class="bid-history-log">${historyHtml}</div>
-    <div class="row mt-16">
-      <button type="button" class="btn btn-primary" onclick="openAssignModal(${current.id})">Finalize Sale</button>
+    <div class="bid-amount-editor">
+      <label for="manualBidAmount">Bid amount (editable)</label>
+      <div class="bid-amount-editor-row">
+        <input type="number" id="manualBidAmount" min="${bidAmount + 1}" step="1000" value="${draftAmount}" oninput="onManualBidInput(this)">
+        <strong class="bid-amount-preview" id="manualBidPreview">${fmtMoney(draftAmount)}</strong>
+      </div>
+      <div class="bid-tier-buttons">
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${nextAmount})">${fmtMoney(nextAmount)}<small>Min raise</small></button>
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${bidAmount + inc * 2})">${fmtMoney(bidAmount + inc * 2)}<small>+${fmtMoney(inc * 2)}</small></button>
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${bidAmount + inc * 5})">${fmtMoney(bidAmount + inc * 5)}<small>+${fmtMoney(inc * 5)}</small></button>
+      </div>
     </div>
+    <label>Teams — tap a tile to place the amount above</label>
+    <div class="auction-team-tiles">${teamTilesHtml || '<div class="empty">No teams yet.</div>'}</div>
+    <div class="row mt-16 auction-desk-actions">
+      <button type="button" class="btn btn-primary" onclick="sellToLeader()" ${hasBids ? '' : 'disabled'}>Sell to leader</button>
+      <button type="button" class="btn" onclick="undoLastBid()" ${hasHistory ? '' : 'disabled'}>Undo last bid</button>
+      <button type="button" class="btn btn-quiet btn-sm" onclick="openAssignModal(${current.id})">Sell with override…</button>
+    </div>
+    <label class="mt-16">Bid history</label>
+    <div class="bid-history-log">${bidHistoryItems + startingBidItem}</div>
   `;
 }
 
-function selectBidTeam(teamId) {
-  state.selectedBidTeamId = state.selectedBidTeamId === teamId ? null : teamId;
+function bidTeamLogo(teamId) {
+  const team = state.teams.find(candidate => candidate.id === teamId);
+  return team && team.logo_url ? team.logo_url : placeholderImg();
+}
+
+function onManualBidInput(el) {
+  const value = parseInt(el.value, 10);
+  state.draftBidAmount = Number.isFinite(value) ? value : null;
+  const preview = document.getElementById('manualBidPreview');
+  if (preview) preview.textContent = state.draftBidAmount ? fmtMoney(state.draftBidAmount) : '—';
+  document.querySelectorAll('.auction-team-tile:not(:disabled) .auction-team-tile-action').forEach(node => {
+    node.textContent = state.draftBidAmount ? fmtMoney(state.draftBidAmount) : 'Set amount';
+  });
+}
+
+function setManualBidAmount(amount) {
+  state.draftBidAmount = amount;
   renderBidPanel();
+  const input = document.getElementById('manualBidAmount');
+  if (input) input.focus();
 }
 
-function selectedBidTeam() {
-  if (!state.selectedBidTeamId) { toast('Pick a team before placing a bid', true); return null; }
-  return state.selectedBidTeamId;
-}
-
-async function quickBid(delta) {
-  const teamId = selectedBidTeam();
-  if (!teamId) return;
+async function oneClickBid(teamId) {
   const current = state.currentAuction;
+  if (!current) return;
   const bidAmount = current.current_bid_amount || current.base_price;
-  await placeBid(teamId, bidAmount + delta);
-}
-
-async function customBid() {
-  const teamId = selectedBidTeam();
-  if (!teamId) return;
-  const incrementInput = document.getElementById('bidCustomIncrement');
-  const increment = parseInt(incrementInput.value);
-  if (!increment || increment < 1 || increment > 1000000) {
-    toast('Enter an increment between 1 and 1,000,000', true);
+  const input = document.getElementById('manualBidAmount');
+  const typed = input ? parseInt(input.value, 10) : NaN;
+  const amount = Number.isFinite(typed) ? typed : (state.draftBidAmount || bidAmount + tierIncrement(bidAmount));
+  if (amount <= bidAmount) {
+    toast(`Bid must be higher than ${fmtMoney(bidAmount)}`, true);
     return;
   }
-  const current = state.currentAuction;
-  const bidAmount = current.current_bid_amount || current.base_price;
-  await placeBid(teamId, bidAmount + increment);
+  state.draftBidAmount = amount;
+  await placeBid(teamId, amount);
 }
 
 async function placeBid(teamId, amount) {
@@ -285,42 +704,75 @@ async function placeBid(teamId, amount) {
   } catch (e) { toast(e.message, true); }
 }
 
-// ---------- Auction tab: pick next player ----------
-function renderAuctionList() {
-  const q = document.getElementById('auctionSearch').value.toLowerCase();
-  const list = state.players.filter(p =>
-    (p.status === 'waiting' || p.status === 'unsold') &&
-    (p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q))
-  );
-  const container = document.getElementById('auctionPlayerList');
-  if (!list.length) { container.innerHTML = `<div class="empty">No players waiting.</div>`; return; }
-  container.innerHTML = list.map(p => `
-    <div class="player-card fifa-card ${cardTierClass(p.card_tier)}">
-      ${ovrBadgeHtml(p)}
-      <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
-      <div class="player-name">${escapeHtml(p.name)}</div>
-      <div class="player-meta">${escapeHtml(p.role || '')}</div>
-      <div class="player-price">${fmtMoney(p.base_price)}</div>
-      ${statusBadge(p.status)}
-      ${statGridHtml(p)}
-      <div class="player-actions">
-        <button class="btn btn-primary btn-sm" onclick="setCurrent(${p.id})">Put Up for Auction</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-async function setCurrent(playerId) {
+async function undoLastBid() {
   try {
-    await apiFetch('/api/auction/set-current', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player_id: playerId }),
-    });
-    toast('Player is now up for auction');
+    await apiFetch('/api/auction/undo-bid', { method: 'POST' });
     await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
     renderAll();
-    document.querySelector('.tab[data-tab="auction"]').click();
+    toast('Last bid undone');
   } catch (e) { toast(e.message, true); }
+}
+
+async function sellToLeader() {
+  const current = state.currentAuction;
+  if (!current || !current.current_bid_team_id) {
+    toast('Needs a leading bidder to sell', true);
+    return;
+  }
+  const amount = current.current_bid_amount || current.base_price;
+  const teamName = current.current_bid_team_name || 'the leading team';
+  if (!confirm(`Sell ${current.name} to ${teamName} for ${fmtMoney(amount)}?`)) return;
+  try {
+    await apiFetch('/api/auction/assign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_id: current.id,
+        team_id: current.current_bid_team_id,
+        sold_price: amount,
+      }),
+    });
+    toast(`Sold to ${teamName}`);
+    await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
+    renderAll();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- Auction tab: start random draw ----------
+function poolPlayers() {
+  return state.players.filter(p => p.status === 'waiting' || p.status === 'unsold');
+}
+
+function renderAuctionControls() {
+  const countEl = document.getElementById('auctionPoolCount');
+  const btn = document.getElementById('startAuctionBtn');
+  if (!btn) return;
+  const pool = poolPlayers();
+  if (state.currentAuction) state.startingAuction = false;
+  const busy = !!state.currentAuction || state.startingAuction;
+  if (countEl) {
+    countEl.textContent = pool.length
+      ? `${pool.length} player${pool.length === 1 ? '' : 's'} ready`
+      : 'Pool empty';
+  }
+  btn.disabled = busy || pool.length === 0;
+  btn.textContent = state.startingAuction
+    ? 'Starting…'
+    : (state.currentAuction ? 'Auction in progress' : 'Start auction');
+}
+
+async function startAuction() {
+  if (state.startingAuction || state.currentAuction) return;
+  state.startingAuction = true;
+  renderAuctionControls();
+  try {
+    await apiFetch('/api/auction/start', { method: 'POST' });
+    toast('Random player drawn — revealing…');
+    // Keep the button locked until SSE refresh sets currentAuction.
+  } catch (e) {
+    state.startingAuction = false;
+    renderAuctionControls();
+    toast(e.message, true);
+  }
 }
 
 async function markUnsold(playerId) {
@@ -472,7 +924,7 @@ function renderTeamsList() {
           <img class="team-logo" src="${t.logo_url || placeholderImg()}" alt="">
           <div>
             <div class="team-name">${escapeHtml(t.name)}</div>
-            <div class="team-purse">${t.squad.length}/${t.slots_max} players</div>
+            <div class="team-purse">${t.squad.length}/${t.slots_max} players${t.has_owner_password ? ' · login set' : ''}</div>
           </div>
           <div style="margin-left:auto; display:flex; gap:6px;">
             <button class="btn btn-sm" onclick="openTeamModal(${t.id})">Edit</button>
@@ -480,7 +932,7 @@ function renderTeamsList() {
           </div>
         </div>
         <div class="team-purse">Purse: ${fmtMoney(t.purse_remaining)} / ${fmtMoney(t.purse_total)}</div>
-        <div class="purse-bar"><div class="purse-bar-fill" style="width:${pct}%"></div></div>
+        <div class="purse-bar"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         <div class="squad-list">${squadHtml}${emptyHtml}</div>
       </div>`;
   }).join('');
@@ -491,14 +943,19 @@ function openTeamModal(id) {
   form.reset();
   document.getElementById('teamId').value = id || '';
   document.getElementById('teamModalTitle').textContent = id ? 'Edit Team' : 'Add Team';
+  const hint = document.getElementById('teamPasswordHint');
   if (id) {
     const t = state.teams.find(x => x.id === id);
     document.getElementById('teamName').value = t.name;
     document.getElementById('teamPurse').value = t.purse_total;
     document.getElementById('teamSlots').value = t.slots_max;
+    if (hint) hint.textContent = t.has_owner_password
+      ? 'A team password is set. Enter a new one only if you want to change it.'
+      : 'No team password yet — set one so the owner can open their manager desk.';
   } else {
     document.getElementById('teamPurse').value = 10000000;
     document.getElementById('teamSlots').value = 7;
+    if (hint) hint.textContent = 'Owners use this password on the viewer login to open their manager desk.';
   }
   document.getElementById('teamModalOverlay').style.display = 'flex';
 }
@@ -511,6 +968,8 @@ async function submitTeamForm(e) {
   fd.append('name', document.getElementById('teamName').value);
   fd.append('purse_total', document.getElementById('teamPurse').value);
   fd.append('slots_max', document.getElementById('teamSlots').value);
+  const ownerPassword = document.getElementById('teamOwnerPassword').value;
+  if (ownerPassword) fd.append('owner_password', ownerPassword);
   const logo = document.getElementById('teamLogo').files[0];
   if (logo) fd.append('logo', logo);
 
@@ -589,6 +1048,13 @@ function fmtMoney(v) {
   if (v === null || v === undefined) return '-';
   return '₹' + Number(v).toLocaleString('en-IN');
 }
+// Same green-to-red purse-health ramp the viewer page uses, so a team's
+// purse bar reads the same way in both places instead of staying a flat,
+// unchanging color as the purse drains.
+function purseColorFor(percentageRemaining) {
+  const hue = Math.round(Math.max(0, Math.min(percentageRemaining, 100)) * 1.35);
+  return `hsl(${hue} 78% 52%)`;
+}
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -614,6 +1080,34 @@ function statGridHtml(p) {
   return `<div class="stat-grid">${stats.map(([label, val]) =>
     `<div class="stat-item"><span class="stat-label">${label}</span><span class="stat-value">${val ?? '-'}</span></div>`
   ).join('')}</div>`;
+}
+// Compact bar-meter version used in the spotlight hero, where the six
+// sub-stats need to be scannable without competing with the name/bid.
+function statBarsHtml(p) {
+  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
+  return `<div class="stat-bars">${stats.map(([label, val]) => {
+    const pct = Math.max(0, Math.min(100, val ?? 0));
+    return `
+      <div class="stat-bar-row">
+        <span class="stat-bar-label">${label}</span>
+        <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
+        <span class="stat-bar-value">${val ?? '-'}</span>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function relativeTime(ts) {
+  if (!ts) return '';
+  const iso = String(ts).includes('T') ? ts : String(ts).replace(' ', 'T') + 'Z';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (diffSec < 5) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  return `${diffHr}h ago`;
 }
 
 function setConnectionStatus(isConnected) {

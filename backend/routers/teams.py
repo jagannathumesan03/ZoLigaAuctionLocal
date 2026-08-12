@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, HTTPException, UploadFile, File, Form
 
 from backend.database import db_cursor, rows_to_list, row_to_dict, enrich_players
-from backend.auth import require_admin, require_any
+from backend.auth import require_admin, require_any, hash_team_password
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -16,6 +16,8 @@ UPLOAD_DIR = os.path.abspath(UPLOAD_DIR)
 
 def team_with_squad(cur, team_row) -> dict:
     team = dict(team_row)
+    has_password = bool(team.pop("owner_password", None))
+    team["has_owner_password"] = has_password
     cur.execute("SELECT * FROM players WHERE team_id = ? ORDER BY sold_price DESC", (team["id"],))
     squad = enrich_players(rows_to_list(cur.fetchall()))
     team["squad"] = squad
@@ -47,6 +49,7 @@ def create_team(
     name: str = Form(...),
     purse_total: int = Form(...),
     slots_max: int = Form(7),
+    owner_password: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     _=Depends(require_admin),
 ):
@@ -62,9 +65,10 @@ def create_team(
 
     with db_cursor() as cur:
         try:
+            password_hash = hash_team_password(owner_password) if owner_password.strip() else ""
             cur.execute(
-                "INSERT INTO teams (name, logo_url, purse_total, purse_remaining, slots_max) VALUES (?, ?, ?, ?, ?)",
-                (name, logo_url, purse_total, purse_total, slots_max),
+                "INSERT INTO teams (name, logo_url, purse_total, purse_remaining, slots_max, owner_password) VALUES (?, ?, ?, ?, ?, ?)",
+                (name, logo_url, purse_total, purse_total, slots_max, password_hash),
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Could not create team: {e}")
@@ -80,6 +84,7 @@ def update_team(
     name: str = Form(...),
     purse_total: int = Form(...),
     slots_max: int = Form(7),
+    owner_password: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     _=Depends(require_admin),
 ):
@@ -103,10 +108,16 @@ def update_team(
                 shutil.copyfileobj(logo.file, f)
             logo_url = f"/static/uploads/teams/{fname}"
 
-        cur.execute(
-            "UPDATE teams SET name=?, logo_url=?, purse_total=?, purse_remaining=?, slots_max=? WHERE id=?",
-            (name, logo_url, purse_total, new_remaining, slots_max, team_id),
-        )
+        if owner_password.strip():
+            cur.execute(
+                "UPDATE teams SET name=?, logo_url=?, purse_total=?, purse_remaining=?, slots_max=?, owner_password=? WHERE id=?",
+                (name, logo_url, purse_total, new_remaining, slots_max, hash_team_password(owner_password), team_id),
+            )
+        else:
+            cur.execute(
+                "UPDATE teams SET name=?, logo_url=?, purse_total=?, purse_remaining=?, slots_max=? WHERE id=?",
+                (name, logo_url, purse_total, new_remaining, slots_max, team_id),
+            )
         cur.execute("SELECT * FROM teams WHERE id = ?", (team_id,))
         return team_with_squad(cur, cur.fetchone())
 
