@@ -12,6 +12,8 @@ from backend.database import (
     enrich_player,
     get_auction_timer_seconds,
     is_auction_timer_enabled,
+    remaining_player_base_prices,
+    max_spendable,
 )
 from backend.auth import require_admin, require_any
 from backend.sse import broadcaster
@@ -321,6 +323,18 @@ async def place_bid(body: BidBody, request: Request, _=Depends(require_admin)):
         current_amount = player["current_bid_amount"] or player["base_price"]
         if body.amount <= current_amount:
             raise HTTPException(status_code=400, detail=f"Bid must be higher than the current bid of {current_amount}")
+
+        max_spend = max_spendable(
+            team["purse_remaining"],
+            team["slots_max"],
+            filled,
+            remaining_player_base_prices(cur),
+        )
+        if body.amount > max_spend:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{team['name']} can spend at most {max_spend} on this player (must keep enough for remaining slots at the cheapest remaining base prices)",
+            )
 
         cur.execute(
             "INSERT INTO bid_history (player_id, team_id, amount) VALUES (?, ?, ?)",

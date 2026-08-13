@@ -167,7 +167,7 @@ function connectSSE() {
     try {
       const data = JSON.parse(e.data);
       state.waitingBackgroundUrl = data.waiting_background_url || '';
-      renderSpotlight();
+      renderAll();
     } catch (err) { /* ignore */ }
   });
   es.onopen = () => setConnectionStatus(true);
@@ -509,6 +509,7 @@ function renderTeamsList() {
   container.innerHTML = state.teams.map(t => {
     const pct = t.purse_total ? Math.round((t.purse_remaining / t.purse_total) * 100) : 0;
     const isLeading = leadingTeamId === t.id;
+    const spend = spendBudget(t);
     return `
       <div class="team-tile${isLeading ? ' is-leading' : ''}">
         <img class="team-logo" src="${t.logo_url || placeholderImg()}" alt="">
@@ -521,6 +522,8 @@ function renderTeamsList() {
             <span class="team-tile-purse">${fmtMoney(t.purse_remaining)}</span>
             <span class="team-tile-slots">${(t.slots_filled != null ? t.slots_filled : t.squad.length)}/${t.slots_max}</span>
           </div>
+          <div class="team-tile-max">Max spend ${fmtMoney(spend.max)}</div>
+          ${spend.keepSlots ? `<div class="team-tile-keep">Keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more</div>` : ''}
           <div class="purse-bar" aria-hidden="true"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         </div>
       </div>`;
@@ -561,8 +564,9 @@ function renderManagerDesk() {
   const nextAmount = current ? currentAmount + nextBidIncrement(currentAmount) : 0;
   const afterBuy = me.purse_remaining - nextAmount;
   const slotsAfter = slotsLeft - 1;
-  const reserve = Math.max(0, slotsAfter) * (current ? current.base_price : 0);
-  const affordable = current && slotsLeft > 0 && me.purse_remaining >= nextAmount;
+  const spend = spendBudget(me);
+  const max = spend.max;
+  const affordable = current && slotsLeft > 0 && nextAmount <= max;
   const counts = squadPositionCounts(squad);
   const gaps = POS_ORDER.filter(pos => counts[pos] === 0);
   const currentPos = current ? roleAbbreviation(current.role) : '';
@@ -625,14 +629,18 @@ function renderManagerDesk() {
         <p class="muted">${!current
           ? 'Waiting for the next player.'
           : !affordable
-            ? (slotsLeft === 0 ? 'Squad complete — you are out of this lot.' : 'This raise is over your remaining purse.')
-            : afterBuy < reserve
-              ? 'Winning here leaves little reserve for remaining slots.'
-              : 'Comfortable — you can still cover remaining slots.'}</p>
+            ? (slotsLeft === 0
+              ? 'Squad complete — you are out of this lot.'
+              : (nextAmount > me.purse_remaining
+                ? 'This raise is over your remaining purse.'
+                : 'This raise is over your max spend — keep the minimum for remaining slots.'))
+            : 'Comfortable — you can still cover remaining slots.'}</p>
       </article>
     </div>
     <div class="auction-status-strip manager-status">
-      <div class="status-chip"><strong>${fmtMoney(me.purse_remaining)}</strong><span>Purse left</span></div>
+      <div class="status-chip"><strong>${fmtMoney(me.purse_remaining)}</strong><span>Points remaining</span></div>
+      <div class="status-chip is-highlight"><strong>${fmtMoney(max)}</strong><span>Max you can spend</span></div>
+      <div class="status-chip"><strong>${spend.keepSlots ? fmtMoney(spend.reserve) : '—'}</strong><span>${spend.keepSlots ? `Kept for ${spend.keepSlots} more` : 'Last slot'}</span></div>
       <div class="status-chip"><strong>${squad.length}/${me.slots_max}</strong><span>Players taken</span></div>
       <div class="status-chip"><strong>${strength || '—'}</strong><span>Squad rating</span></div>
       <div class="status-chip"><strong>${gaps.length ? gaps.join(' ') : 'None'}</strong><span>Position gaps</span></div>
@@ -682,6 +690,7 @@ function renderTeamViewList() {
     const emptySlotMarkup = Array.from({ length: emptySlots }, () =>
       `<div class="team-view-empty-slot">Open player slot</div>`
     ).join('');
+    const spend = spendBudget(team);
 
     return `
       <article class="team-view-card">
@@ -691,7 +700,7 @@ function renderTeamViewList() {
         </header>
         <div class="team-view-purse">
           <div class="team-purse-chart" style="--purse-percent:${percentageRemaining}; --purse-color:${purseColor};" role="img" aria-label="${escapeHtml(team.name)} has ${percentageRemaining}% purse remaining"><span>${percentageRemaining}%</span></div>
-          <div><span>Remaining purse</span><strong>${fmtMoney(team.purse_remaining)}</strong><small>of ${fmtMoney(team.purse_total)} total</small></div>
+          <div><span>Remaining purse</span><strong>${fmtMoney(team.purse_remaining)}</strong><small>of ${fmtMoney(team.purse_total)} total</small><small class="team-view-max-spend">Max spend ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more` : ''}</small></div>
         </div>
         <div class="team-view-purse-bar" aria-hidden="true"><span style="width:${percentageRemaining}%; background:${purseColor};"></span></div>
         <div class="team-view-squad">${selectedPlayers}${emptySlotMarkup}</div>
@@ -968,6 +977,30 @@ function statusBadge(status) {
 function fmtMoney(v) {
   if (v === null || v === undefined) return '-';
   return '₹' + Number(v).toLocaleString('en-IN');
+}
+function remainingBasePrices() {
+  return (state.players || [])
+    .filter(p => p.status === 'waiting' || p.status === 'unsold')
+    .map(p => p.base_price || 0)
+    .sort((a, b) => a - b);
+}
+function slotsRemaining(team) {
+  const filled = team.slots_filled != null ? team.slots_filled : (team.squad || []).length;
+  return Math.max(0, (team.slots_max || 0) - filled);
+}
+function spendBudget(team) {
+  const left = slotsRemaining(team);
+  if (left <= 0) return { max: 0, reserve: 0, keepSlots: 0 };
+  const keepSlots = Math.max(0, left - 1);
+  const reserve = remainingBasePrices().slice(0, keepSlots).reduce((sum, price) => sum + price, 0);
+  return {
+    max: Math.max(0, (team.purse_remaining || 0) - reserve),
+    reserve,
+    keepSlots,
+  };
+}
+function maxSpend(team) {
+  return spendBudget(team).max;
 }
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

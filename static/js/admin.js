@@ -178,10 +178,7 @@ async function submitSettingsForm(e) {
       ? 'Saved — timer applies to the next player put up for auction.'
       : 'Saved — auction timer is disabled.';
     toast(enabled ? 'Auction timer updated' : 'Auction timer disabled');
-    if (state.currentAuction) {
-      await loadCurrentAuction();
-      renderSpotlight();
-    }
+    renderAll();
   } catch (err) {
     status.textContent = '';
     toast(err.message, true);
@@ -280,7 +277,7 @@ function connectSSE() {
       state.waitingBackgroundUrl = data.waiting_background_url || '';
       fillSettingsForm();
       if (state.currentAuction) await loadCurrentAuction();
-      renderSpotlight();
+      renderAll();
     } catch (err) { /* ignore */ }
   });
   es.onopen = () => setConnectionStatus(true);
@@ -587,11 +584,18 @@ function renderBidPanel() {
 
   const teamTilesHtml = state.teams.map(t => {
     const full = t.squad.length >= t.slots_max;
+    const spend = spendBudget(t);
+    const overMax = draftAmount > spend.max;
     const cantAfford = t.purse_remaining < draftAmount;
     const leading = current.current_bid_team_id === t.id;
-    const disabled = full || cantAfford;
-    const reason = full ? 'Squad full' : (cantAfford ? 'Insufficient purse' : `Bid ${fmtMoney(draftAmount)}`);
+    const disabled = full || overMax;
+    const reason = full
+      ? 'Squad full'
+      : (cantAfford ? 'Insufficient purse' : (overMax ? 'Over max spend' : `Bid ${fmtMoney(draftAmount)}`));
     const pct = t.purse_total ? Math.max(0, Math.min(100, Math.round((t.purse_remaining / t.purse_total) * 100))) : 0;
+    const keepHint = spend.keepSlots
+      ? `Keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more`
+      : 'Last slot — full purse';
     return `
       <button type="button"
         class="auction-team-tile${leading ? ' is-leading' : ''}${disabled ? ' is-disabled' : ''}"
@@ -601,7 +605,9 @@ function renderBidPanel() {
         <img class="auction-team-tile-logo" src="${t.logo_url || placeholderImg()}" alt="">
         <div class="auction-team-tile-main">
           <strong class="auction-team-tile-name">${escapeHtml(t.name)}</strong>
-          <span class="auction-team-tile-meta">${t.squad.length}/${t.slots_max} slots · ${fmtMoney(t.purse_remaining)}</span>
+          <span class="auction-team-tile-meta">${t.squad.length}/${t.slots_max} slots · remaining ${fmtMoney(t.purse_remaining)}</span>
+          <span class="auction-team-tile-max">Max spend ${fmtMoney(spend.max)}</span>
+          <span class="auction-team-tile-keep">${keepHint}</span>
           <span class="purse-bar"><span class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></span></span>
           <span class="auction-team-tile-action">${disabled ? reason : fmtMoney(draftAmount)}</span>
         </div>
@@ -688,6 +694,11 @@ async function oneClickBid(teamId) {
     return;
   }
   state.draftBidAmount = amount;
+  const team = state.teams.find(candidate => candidate.id === teamId);
+  if (team && amount > maxSpend(team)) {
+    toast(`${team.name} can spend at most ${fmtMoney(maxSpend(team))} (must keep enough for remaining slots at the cheapest remaining bases)`, true);
+    return;
+  }
   await placeBid(teamId, amount);
 }
 
@@ -918,6 +929,7 @@ function renderTeamsList() {
       </div>`).join('');
     const emptySlots = Math.max(t.slots_max - t.squad.length, 0);
     const emptyHtml = Array.from({ length: emptySlots }).map(() => `<div class="squad-slot-empty">Empty slot</div>`).join('');
+    const spend = spendBudget(t);
     return `
       <div class="team-card">
         <div class="team-header">
@@ -931,7 +943,8 @@ function renderTeamsList() {
             <button class="btn btn-danger btn-sm" onclick="deleteTeam(${t.id})">Delete</button>
           </div>
         </div>
-        <div class="team-purse">Purse: ${fmtMoney(t.purse_remaining)} / ${fmtMoney(t.purse_total)}</div>
+        <div class="team-purse">Remaining: ${fmtMoney(t.purse_remaining)} / ${fmtMoney(t.purse_total)}</div>
+        <div class="team-purse team-max-spend">Max spend: ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more` : ''}</div>
         <div class="purse-bar"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         <div class="squad-list">${squadHtml}${emptyHtml}</div>
       </div>`;
@@ -1008,7 +1021,7 @@ function openAssignModal(playerId) {
   const select = document.getElementById('assignTeamId');
   select.innerHTML = state.teams.map(t =>
     `<option value="${t.id}" ${t.squad.length >= t.slots_max ? 'disabled' : ''} ${liveTeamId && t.id === liveTeamId ? 'selected' : ''}>
-      ${escapeHtml(t.name)} (${t.squad.length}/${t.slots_max} slots, purse ${fmtMoney(t.purse_remaining)})
+      ${escapeHtml(t.name)} (${t.squad.length}/${t.slots_max} slots, remaining ${fmtMoney(t.purse_remaining)}, max ${fmtMoney(maxSpend(t))})
     </option>`
   ).join('');
   document.getElementById('assignSoldPrice').value = liveBidAmount || p.base_price;
@@ -1047,6 +1060,30 @@ function statusBadge(status) {
 function fmtMoney(v) {
   if (v === null || v === undefined) return '-';
   return '₹' + Number(v).toLocaleString('en-IN');
+}
+function remainingBasePrices() {
+  return (state.players || [])
+    .filter(p => p.status === 'waiting' || p.status === 'unsold')
+    .map(p => p.base_price || 0)
+    .sort((a, b) => a - b);
+}
+function slotsLeft(team) {
+  const filled = team.slots_filled != null ? team.slots_filled : (team.squad || []).length;
+  return Math.max(0, (team.slots_max || 0) - filled);
+}
+function spendBudget(team) {
+  const left = slotsLeft(team);
+  if (left <= 0) return { max: 0, reserve: 0, keepSlots: 0 };
+  const keepSlots = Math.max(0, left - 1);
+  const reserve = remainingBasePrices().slice(0, keepSlots).reduce((sum, price) => sum + price, 0);
+  return {
+    max: Math.max(0, (team.purse_remaining || 0) - reserve),
+    reserve,
+    keepSlots,
+  };
+}
+function maxSpend(team) {
+  return spendBudget(team).max;
 }
 // Same green-to-red purse-health ramp the viewer page uses, so a team's
 // purse bar reads the same way in both places instead of staying a flat,

@@ -304,6 +304,7 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
 .team-logo { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; background: #0e141b; }
 .team-name { font-weight: 800; font-size: 1.05rem; }
 .team-purse { font-size: 0.82rem; color: var(--text-dim); }
+.team-max-spend { color: #f0c14b; font-weight: 700; }
 .purse-bar { height: 6px; background: #0e141b; border-radius: 4px; overflow: hidden; margin: 6px 0 12px; }
 .purse-bar-fill { height: 100%; background: var(--accent); transition: width 300ms ease, background 300ms ease; }
 .squad-list { display: flex; flex-direction: column; gap: 6px; }
@@ -644,6 +645,15 @@ h1, h2, h3 { letter-spacing: 0; }
 .auction-team-tile-meta {
   color: var(--text-dim);
   font-size: 0.68rem;
+}
+.auction-team-tile-max {
+  color: #f0c14b;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.auction-team-tile-keep {
+  color: var(--text-dim);
+  font-size: 0.62rem;
 }
 .auction-team-tile .purse-bar {
   height: 4px;
@@ -1299,6 +1309,8 @@ h1, h2, h3 { letter-spacing: 0; }
 .team-tile-name { color: #e2eaff; font-size: 0.74rem; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-tile-purse-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 3px; }
 .team-tile-purse { color: #5bc1ff; font-size: 0.8rem; font-weight: 800; }
+.team-tile-max { color: #f0c14b; font-size: 0.68rem; font-weight: 700; margin-top: 1px; }
+.team-tile-keep { color: var(--text-dim); font-size: 0.62rem; margin-top: 1px; }
 .team-tile-slots { color: var(--text-dim); font-size: 0.64rem; }
 .team-tile .purse-bar { height: 4px; margin: 5px 0 0; }
 
@@ -1315,6 +1327,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .team-view-purse > div:last-child { display: flex; flex-direction: column; min-width: 0; }
 .team-view-purse > div:last-child > span, .team-view-purse small { color: #9eafcf; font-size: 0.67rem; }
 .team-view-purse strong { color: #ecf4ff; font-size: 1.1rem; line-height: 1.25; }
+.team-view-max-spend { color: #f0c14b !important; font-weight: 700; margin-top: 2px; }
 .team-view-purse-bar { height: 6px; margin: 0 15px 13px; overflow: hidden; border-radius: 999px; background: rgba(2, 10, 26, 0.72); }
 .team-view-purse-bar > span { display: block; height: 100%; border-radius: inherit; transition: width 300ms ease, background 300ms ease; }
 .team-view-squad { display: flex; flex-direction: column; gap: 6px; padding: 0 15px 15px; }
@@ -1585,6 +1598,10 @@ h1, h2, h3 { letter-spacing: 0; }
 [data-theme="light"] .team-view-purse > div:last-child > span,
 [data-theme="light"] .team-view-purse small,
 [data-theme="light"] .team-view-player small { color: #5d758b; }
+[data-theme="light"] .auction-team-tile-max,
+[data-theme="light"] .team-tile-max,
+[data-theme="light"] .team-view-max-spend,
+[data-theme="light"] .team-max-spend { color: #b45309 !important; }
 [data-theme="light"] .next-player strong,
 [data-theme="light"] .team-view-player b { color: #19354e; }
 [data-theme="light"] .next-player span,

@@ -5,7 +5,15 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException, UploadFile, File, Form
 
-from backend.database import db_cursor, rows_to_list, row_to_dict, enrich_players
+from backend.database import (
+    db_cursor,
+    rows_to_list,
+    row_to_dict,
+    enrich_players,
+    remaining_player_base_prices,
+    squad_completion_reserve,
+    max_spendable,
+)
 from backend.auth import require_admin, require_any, hash_team_password
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
@@ -14,7 +22,7 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "static", "uplo
 UPLOAD_DIR = os.path.abspath(UPLOAD_DIR)
 
 
-def team_with_squad(cur, team_row) -> dict:
+def team_with_squad(cur, team_row, remaining_prices=None) -> dict:
     team = dict(team_row)
     has_password = bool(team.pop("owner_password", None))
     team["has_owner_password"] = has_password
@@ -22,14 +30,24 @@ def team_with_squad(cur, team_row) -> dict:
     squad = enrich_players(rows_to_list(cur.fetchall()))
     team["squad"] = squad
     team["slots_filled"] = len(squad)
+    team["slots_remaining"] = max(0, team["slots_max"] - len(squad))
+    prices = remaining_prices if remaining_prices is not None else remaining_player_base_prices(cur)
+    team["max_spend_reserve"] = squad_completion_reserve(team["slots_remaining"], prices)
+    team["max_spend"] = max_spendable(
+        team["purse_remaining"],
+        team["slots_max"],
+        len(squad),
+        prices,
+    )
     return team
 
 
 @router.get("")
 def list_teams(request: Request, _=Depends(require_any)):
     with db_cursor() as cur:
+        prices = remaining_player_base_prices(cur)
         cur.execute("SELECT * FROM teams ORDER BY name")
-        teams = [team_with_squad(cur, r) for r in cur.fetchall()]
+        teams = [team_with_squad(cur, r, prices) for r in cur.fetchall()]
     return teams
 
 
