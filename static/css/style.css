@@ -1195,7 +1195,7 @@ h1, h2, h3 { letter-spacing: 0; }
 @media (max-width: 760px) {
   .manager-grid, .manager-squad { grid-template-columns: 1fr; }
 }
-.viewer-page .container { max-width: 1400px; padding-top: 12px; }
+.viewer-page .container { max-width: none; width: 100%; padding: 12px 16px 24px; }
 .viewer-page .topbar { min-height: 58px; background: rgba(6, 13, 29, 0.95); }
 .viewer-page .auction-broadcast { margin-top: 0; }
 .viewer-page .viewer-window {
@@ -1215,7 +1215,7 @@ h1, h2, h3 { letter-spacing: 0; }
   position: relative;
   flex: 1 1 42%;
   min-width: 240px;
-  max-width: 720px;
+  max-width: none;
   aspect-ratio: 16 / 9;
   align-self: center;
   overflow: hidden;
