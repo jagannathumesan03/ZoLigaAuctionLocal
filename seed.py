@@ -4,14 +4,14 @@ Players can be added via the admin dashboard (one by one or CSV bulk upload).
 from backend.database import init_db, db_cursor
 
 TEAMS = [
-    ("Thunder FC", 10_000_000),
-    ("Royal Strikers", 10_000_000),
-    ("Falcon United", 10_000_000),
-    ("Titan Warriors", 10_000_000),
-    ("Storm Riders", 10_000_000),
-    ("Phoenix FC", 10_000_000),
-    ("Blaze United", 10_000_000),
-    ("Eagle Kings", 10_000_000),
+    ("Thunder FC", 1000),
+    ("Royal Strikers", 1000),
+    ("Falcon United", 1000),
+    ("Titan Warriors", 1000),
+    ("Storm Riders", 1000),
+    ("Phoenix FC", 1000),
+    ("Blaze United", 1000),
+    ("Eagle Kings", 1000),
 ]
 
 
@@ -24,7 +24,7 @@ def seed():
             return
         for name, purse in TEAMS:
             cur.execute(
-                "INSERT INTO teams (name, logo_url, purse_total, purse_remaining, slots_max) VALUES (?, '', ?, ?, 7)",
+                "INSERT INTO teams (name, logo_url, purse_total, purse_remaining, slots_max) VALUES (?, '', ?, ?, 8)",
                 (name, purse, purse),
             )
     print(f"Seeded {len(TEAMS)} teams.")

@@ -1,6 +1,6 @@
 # Football Tournament Auction Website
 
-Full-stack auction tracker for an 8-team, 56-player football tournament. The actual auction/bidding happens in person; this site is the live dashboard — the admin marks a player as "up for auction," then records the winning team and price once decided in the room. Every viewer's screen updates instantly (no refresh) via Server-Sent Events.
+Full-stack auction tracker for ZoLiga Season 4: **8 teams**, **8 players per team**, **64 players**, **₹1,000 Cr purse**. The actual auction happens in the room; this site is the live dashboard. Every viewer's screen updates instantly via Server-Sent Events.
 
 ## Stack
 
@@ -76,16 +76,17 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
 ## Using it on the day
 
-1. **Before the auction:** log in as admin, go to *Players*, and either add all 56 players one by one or use *Bulk CSV Upload* (see `sample_players.csv` for the expected columns: `name, role, base_price, stats, pace, shooting, passing, dribbling, defending, physical`). Photos can be added by editing each player afterward. Go to *Teams* and confirm the 8 teams and purses are correct (edit purse/slots if needed — created via `seed.py`).
-2. **During the auction:** on the *Auction Control* tab, search for the next player and click **Put Up for Auction** — this instantly appears on every viewer's screen, starting at the player's base price. As bidding happens in the room, use the **Live Bidding** panel to track it in real time (see below). Once bidding settles, click **Finalize Sale** — it pre-fills the winning team and price from the live bid, confirm to complete the sale. If nobody bids, click **Mark Unsold** instead.
-3. **Live bidding panel:** click the button for whichever team is currently bidding (it highlights), then either click one of the quick-raise buttons (increments scale automatically with the bid size — bigger raises once the price gets higher) or type a custom amount (1 to 1,000,000) and click **+ Add to bid** to raise by that much. Every raise is recorded in the bid history log below, and the whole panel — bid amount, leading team, history — updates live on the viewer screen too, no reload needed.
+1. **Before the auction:** log in as admin, go to *Players*, and either add all 64 players one by one or use *Bulk CSV Upload* (see `sample_players.csv` for the expected columns: `name, role, base_price, stats, stars`). `base_price` is in crore and is **₹30 Cr** for every player. `stars` is 2.0 to 5.0 in 0.5 steps. Photos can be added by editing each player afterward. Go to *Teams* and confirm the 8 teams: **₹1,000 Cr purse** and **8 slots** each (created via `seed.py`).
+2. **During the auction:** on the *Auction Control* tab, press **Start auction** to draw a random player from the pool. Bidding starts at ₹30 Cr. Raises are **₹5 Cr** up to ₹200 Cr, then **₹10 Cr** (195 → 200 → 210). Jump bids must land on a valid step. If a team's max spend is below the next standard bid, they may go **all-in** at that max. Once bidding settles, click **Sell** / **Sell to leader**. If nobody bids, click **Mark unsold** — the player returns later at the same ₹30 Cr base until sold.
+3. **Live bidding panel:** tap a team tile to place the amount shown (or type a jump). Max spend is `purse remaining − ₹30 Cr × remaining slots after this buy`. A full 8-player squad cannot bid again.
 4. **Mistakes happen:** if a player was assigned to the wrong team or at the wrong price, use **Undo** (on the Players tab) to send them back to the waiting pool — the team's purse is automatically refunded and any live bid state for that player is cleared.
-5. **Viewers:** anyone with the viewer password sees a live "Now Auctioning" spotlight (with the current bid amount and leading team), a live bid history log, all 8 teams with their current squads and remaining purse, and a searchable list of all 56 players with their status (waiting / up for auction / sold / unsold). Updates appear with no page reload.
+5. **Viewers:** anyone with the viewer password sees a live "Now Auctioning" spotlight (with the current bid amount and leading team), a live bid history log, all 8 teams with squads and remaining purse / max spend, and a searchable list of all players. Updates appear with no page reload.
 
 ## Notes / things worth knowing
 
 - The SQLite database is a single file, `auction.db`, created next to the project on first run — back it up periodically during the actual event (just copy the file).
-- Purse and slot limits are enforced server-side: assigning a player that would exceed a team's remaining purse or its 7-player slot limit is rejected with an error. A team with a full roster also can't place live bids.
+- Purse and slot limits follow Season 4 rules server-side: max bid = remaining purse − ₹30 Cr × unfilled slots after the purchase. A team with 8 players cannot bid again. Unused purse expires.
+- Bid amounts must follow the increment grid (₹5 Cr to ₹200 Cr, then ₹10 Cr). Jump bids are allowed on that grid. All-in is allowed only when max spend is below the next standard bid.
 - Only one player can be "up for auction" at a time; marking a new one automatically resets any previous one back to "waiting," along with clearing its live bid state.
 - Live bids must always raise the price — the app rejects a "bid" that's equal to or lower than the current one. The live bid amount and history are separate from the final sale; the admin can still edit the team/price on the finalize step before confirming.
 - If you already had this app running before live bidding was added, no need to re-run `seed.py` — the app automatically adds the new database columns/table to your existing `auction.db` the next time it starts.

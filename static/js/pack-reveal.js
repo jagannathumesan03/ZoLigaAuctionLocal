@@ -12,7 +12,7 @@
 
   function fmtMoney(v) {
     if (v === null || v === undefined) return '-';
-    return '₹' + Number(v).toLocaleString('en-IN');
+    return '₹' + Number(v).toLocaleString('en-IN') + ' Cr';
   }
 
   function escapeHtml(str) {
@@ -36,6 +36,16 @@
     return arr;
   }
 
+
+  function starValue(player) {
+    const n = parseFloat(player && player.stars);
+    if (!Number.isFinite(n)) return 3;
+    return Math.max(2, Math.min(5, Math.round(n * 2) / 2));
+  }
+
+  function ratingLabel(player) {
+    return starValue(player).toFixed(1).replace(/\.0$/, '');
+  }
   function buildReel(winner, candidates) {
     const pool = shuffle(
       (candidates || []).filter(p => p && p.id !== winner.id)
@@ -59,7 +69,7 @@
     const photo = player.photo_url || placeholderImg();
     return `
       <div class="slot-tile card-${escapeHtml(tier)}${isWinner ? ' is-winner' : ''}" data-player-id="${player.id}">
-        <div class="slot-tile-ovr">${player.overall ?? '—'}</div>
+        <div class="slot-tile-ovr">${ratingLabel(player)}</div>
         <img class="slot-tile-photo" src="${photo}" alt="" onerror="this.src='${placeholderImg()}'">
         <div class="slot-tile-name">${escapeHtml(player.name || 'Player')}</div>
         <div class="slot-tile-role">${escapeHtml(player.role || 'Player')}</div>
