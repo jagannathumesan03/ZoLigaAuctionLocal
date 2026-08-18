@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=max-spend-2">
+<link rel="stylesheet" href="/static/css/style.css?v=stars-4">
 <script src="/static/js/theme.js?v=theme-1"></script>
 </head>
 <body class="admin-page">
@@ -170,17 +170,19 @@
         </div>
         <div class="field"><label>Base Price</label><input type="number" id="playerBasePrice" min="0" value="0" required></div>
       </div>
-      <div class="field"><label>Stats / Bio</label><textarea id="playerStats" rows="3"></textarea></div>
+      <div class="field"><label>Notes / bio</label><textarea id="playerStats" rows="3"></textarea></div>
       <div class="field">
-        <label>FIFA-style card ratings (0-99)</label>
-        <div class="card-stat-inputs">
-          <div class="field"><label>PAC</label><input type="number" id="playerPace" min="0" max="99" value="50"></div>
-          <div class="field"><label>SHO</label><input type="number" id="playerShooting" min="0" max="99" value="50"></div>
-          <div class="field"><label>PAS</label><input type="number" id="playerPassing" min="0" max="99" value="50"></div>
-          <div class="field"><label>DRI</label><input type="number" id="playerDribbling" min="0" max="99" value="50"></div>
-          <div class="field"><label>DEF</label><input type="number" id="playerDefending" min="0" max="99" value="50"></div>
-          <div class="field"><label>PHY</label><input type="number" id="playerPhysical" min="0" max="99" value="50"></div>
-        </div>
+        <label for="playerStars">Player level</label>
+        <select id="playerStars">
+          <option value="2">2.0</option>
+          <option value="2.5">2.5</option>
+          <option value="3" selected>3.0</option>
+          <option value="3.5">3.5</option>
+          <option value="4">4.0</option>
+          <option value="4.5">4.5</option>
+          <option value="5">5.0 (top player)</option>
+        </select>
+        <p class="muted settings-help">Organizer-set player value (2.0 to 5.0, in 0.5 steps). Top players are 5.0.</p>
       </div>
       <div class="field"><label>Photo</label><input type="file" id="playerPhoto" accept="image/*"></div>
       <div class="row mt-16">
@@ -237,8 +239,8 @@
   </div>
 </div>
 
-<script src="/static/js/confetti.js?v=timer-1"></script>
-<script src="/static/js/pack-reveal.js?v=slot-h-1"></script>
-<script src="/static/js/admin.js?v=max-spend-2"></script>
+<script src="/static/js/confetti.js?v=stars-4"></script>
+<script src="/static/js/pack-reveal.js?v=stars-4"></script>
+<script src="/static/js/admin.js?v=stars-4"></script>
 </body>
 </html>

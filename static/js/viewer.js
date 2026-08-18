@@ -349,6 +349,8 @@ function resultStateHtml(result) {
         <img class="spotlight-player-photo" src="${p.photo_url || placeholderImg()}" alt="${escapeHtml(p.name || 'Player')}">
         <div class="info">
           <h2>${escapeHtml(p.name || 'Player')}</h2>
+          ${ratingBadgeHtml(p, 'rating-badge-lg')}
+          ${starsHtml(p, 'star-rating-lg')}
           <div class="result-price">${fmtMoney(p.sold_price)}</div>
           <div class="result-team">to <b>${escapeHtml(p.team_name || 'Unknown team')}</b></div>
         </div>
@@ -409,12 +411,13 @@ function renderSpotlight() {
   container.innerHTML = `
     <div class="spotlight fifa-card has-bid-panel ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
-      ${ovrBadgeHtml(current)}
       <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
       <div class="info">
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
+        ${ratingBadgeHtml(current, 'rating-badge-lg')}
+        ${starsHtml(current, 'star-rating-lg')}
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
           <span class="eyebrow">Current bid</span>
@@ -427,7 +430,6 @@ function renderSpotlight() {
                <span class="leading-chip">Leading</span>`
             : `<span class="muted">No bids yet — starting at base price</span>`}
         </div>
-        ${statBarsHtml(current)}
       </div>
       ${spotlightBidPanelHtml()}
     </div>`;
@@ -575,25 +577,22 @@ function renderManagerDesk() {
     ? Math.round(squad.reduce((sum, p) => sum + (p.sold_price || 0), 0) / squad.length)
     : 0;
   const strength = squad.length
-    ? Math.round(squad.reduce((sum, p) => sum + (p.overall || 0), 0) / squad.length)
+    ? (squad.reduce((sum, p) => sum + starValue(p), 0) / squad.length).toFixed(1)
     : 0;
   const kit = teamKitColor(me);
 
   const signings = squad.length
     ? `<div class="manager-signings-wrap"><table class="manager-signings-table">
-        <thead><tr><th></th><th>Player</th><th>Pos</th><th>Skills</th><th>Rtg</th><th class="paid">Paid</th></tr></thead>
+        <thead><tr><th></th><th>Player</th><th>Pos</th><th>Notes</th><th>Level</th><th class="paid">Paid</th></tr></thead>
         <tbody>${squad.map(p => {
           const pos = roleAbbreviation(p.role);
-          const skills = [p.stats, ['PAC', p.pace, 'SHO', p.shooting, 'PAS', p.passing, 'DRI', p.dribbling, 'DEF', p.defending, 'PHY', p.physical]
-            .reduce((out, _, i, arr) => (i % 2 === 0 ? out.concat(`${arr[i]} ${arr[i + 1] ?? '-'}`) : out), []).join(' · ')]
-            .filter(Boolean).join(' · ');
           return `
             <tr>
               <td><img src="${p.photo_url || placeholderImg()}" alt="" style="border-color:${kit}"></td>
               <td>${escapeHtml(p.name)}</td>
               <td><span class="manager-pos-chip" style="background:${POS_COLOR[pos] || '#6b7280'}">${escapeHtml(pos)}</span></td>
-              <td class="muted">${escapeHtml(skills || '—')}</td>
-              <td class="num">${p.overall != null ? p.overall : '—'}</td>
+              <td class="muted">${escapeHtml(p.stats || '—')}</td>
+              <td class="num">${starsHtml(p, 'star-rating-sm')}</td>
               <td class="paid">${fmtMoney(p.sold_price)}</td>
             </tr>`;
         }).join('')}</tbody>
@@ -613,7 +612,7 @@ function renderManagerDesk() {
             <img src="${current.photo_url || placeholderImg()}" alt="">
             <div>
               <strong>${escapeHtml(current.name)}</strong>
-              <span>${escapeHtml(current.role || 'Player')}${current.overall != null ? ` · ${current.overall} OVR` : ''}</span>
+              <span>${escapeHtml(current.role || 'Player')} · ${starsHtml(current, 'star-rating-inline')}</span>
               <div class="muted">Live bid ${fmtMoney(currentAmount)}</div>
               ${current.current_bid_team_name ? `<div class="muted">Led by ${escapeHtml(current.current_bid_team_name)}</div>` : ''}
               ${fillsGap ? `<span class="leading-chip">Fills your ${currentPos} gap</span>` : ''}
@@ -642,7 +641,7 @@ function renderManagerDesk() {
       <div class="status-chip is-highlight"><strong>${fmtMoney(max)}</strong><span>Max you can spend</span></div>
       <div class="status-chip"><strong>${spend.keepSlots ? fmtMoney(spend.reserve) : '—'}</strong><span>${spend.keepSlots ? `Kept for ${spend.keepSlots} more` : 'Last slot'}</span></div>
       <div class="status-chip"><strong>${squad.length}/${me.slots_max}</strong><span>Players taken</span></div>
-      <div class="status-chip"><strong>${strength || '—'}</strong><span>Squad rating</span></div>
+      <div class="status-chip"><strong>${strength ? strength + '★' : '—'}</strong><span>Squad level</span></div>
       <div class="status-chip"><strong>${gaps.length ? gaps.join(' ') : 'None'}</strong><span>Position gaps</span></div>
     </div>
     <div class="manager-squad">
@@ -682,7 +681,7 @@ function renderTeamViewList() {
       <div class="team-view-player">
         <img class="team-view-player-photo" src="${player.photo_url || placeholderImg()}" alt="${escapeHtml(player.name)}">
         <b>${escapeHtml(player.name)}</b>
-        ${player.overall !== undefined ? `<span class="ovr-chip ${cardTierClass(player.card_tier)}">${player.overall}</span>` : ''}
+        ${starsHtml(player, 'star-rating-sm')}
         <span class="team-view-player-position">${roleAbbreviation(player.role)}</span>
         <strong>${fmtMoney(player.sold_price)}</strong>
       </div>`).join('');
@@ -719,14 +718,14 @@ function renderPlayersList() {
   if (!list.length) { container.innerHTML = `<div class="empty">No players found.</div>`; return; }
   container.innerHTML = list.map(p => `
     <div class="player-card fifa-card ${cardTierClass(p.card_tier)}">
-      ${ovrBadgeHtml(p)}
+      ${ratingBadgeHtml(p)}
       <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
       <div class="player-name">${escapeHtml(p.name)}</div>
       <div class="player-meta">${escapeHtml(p.role || '')}</div>
+      ${starsHtml(p)}
       <div class="player-price">${fmtMoney(p.base_price)}${p.sold_price ? ' &rarr; ' + fmtMoney(p.sold_price) : ''}</div>
       ${statusBadge(p.status)}
       ${p.team_name ? `<div class="player-meta">Team: ${escapeHtml(p.team_name)}</div>` : ''}
-      ${statGridHtml(p)}
     </div>
   `).join('');
 }
@@ -1025,35 +1024,35 @@ function relativeTime(ts) {
   return `${diffHr}h ago`;
 }
 
-// ---------- FIFA-style card helpers ----------
-// player.overall / player.card_tier are computed server-side (see
-// backend/database.py's enrich_player); these just turn them into markup
-// shared by the spotlight, team squad view, and player pool cards.
+// ---------- Player card helpers ----------
+// Organizers set player.stars (2.0–5.0, half-step). card_tier is derived server-side.
 function cardTierClass(tier) {
   return 'card-' + (tier || 'bronze');
 }
-function ovrBadgeHtml(p) {
-  if (p.overall === undefined || p.overall === null) return '';
-  return `<div class="ovr-badge ${cardTierClass(p.card_tier)}"><span class="ovr-value">${p.overall}</span><span class="ovr-label">OVR</span></div>`;
+function starValue(p) {
+  const n = parseFloat(p && p.stars);
+  if (!Number.isFinite(n)) return 3;
+  return Math.max(2, Math.min(5, Math.round(n * 2) / 2));
 }
-function statGridHtml(p) {
-  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
-  return `<div class="stat-grid">${stats.map(([label, val]) =>
-    `<div class="stat-item"><span class="stat-label">${label}</span><span class="stat-value">${val ?? '-'}</span></div>`
-  ).join('')}</div>`;
+function ratingLabel(p) {
+  return starValue(p).toFixed(1).replace(/\.0$/, '');
 }
-// Compact bar-meter version used in the hero spotlight, where the six
-// sub-stats need to be scannable at a glance without competing visually
-// with the player's name or the current bid.
-function statBarsHtml(p) {
-  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
-  return `<div class="stat-bars">${stats.map(([label, val]) => {
-    const pct = Math.max(0, Math.min(100, val ?? 0));
-    return `
-      <div class="stat-bar-row">
-        <span class="stat-bar-label">${label}</span>
-        <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
-        <span class="stat-bar-value">${val ?? '-'}</span>
-      </div>`;
-  }).join('')}</div>`;
+function starsHtml(p, extraClass) {
+  const value = starValue(p);
+  const cls = extraClass ? ` ${extraClass}` : '';
+  const stars = [];
+  for (let i = 1; i <= 5; i += 1) {
+    if (value >= i) {
+      stars.push('<span class="star-glyph is-full">★</span>');
+    } else if (value >= i - 0.5) {
+      stars.push('<span class="star-glyph is-half"><span class="star-right">★</span><span class="star-left">★</span></span>');
+    } else {
+      stars.push('<span class="star-glyph is-empty">★</span>');
+    }
+  }
+  return `<span class="star-rating${cls}" aria-label="${value} of 5 stars">${stars.join('')}</span>`;
+}
+function ratingBadgeHtml(p, extraClass) {
+  const cls = extraClass ? ` ${extraClass}` : '';
+  return `<div class="rating-badge ${cardTierClass(p.card_tier)}${cls}" aria-label="Player value ${starValue(p)} of 5">${ratingLabel(p)}</div>`;
 }

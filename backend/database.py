@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS players (
     auction_timer_paused INTEGER NOT NULL DEFAULT 0,
     auction_remaining_seconds INTEGER,
     auction_reveal_until TEXT,
+    stars REAL NOT NULL DEFAULT 3.0,
     pace INTEGER NOT NULL DEFAULT 50,
     shooting INTEGER NOT NULL DEFAULT 50,
     passing INTEGER NOT NULL DEFAULT 50,
@@ -100,6 +101,33 @@ def _migrate(cur):
     for stat in CARD_STAT_FIELDS:
         if stat not in cols:
             cur.execute(f"ALTER TABLE players ADD COLUMN {stat} INTEGER NOT NULL DEFAULT 50")
+    if "stars" not in cols:
+        cur.execute("ALTER TABLE players ADD COLUMN stars REAL NOT NULL DEFAULT 3.0")
+        cur.execute(
+            "SELECT id, pace, shooting, passing, dribbling, defending, physical FROM players"
+        )
+        for row in cur.fetchall():
+            cur.execute(
+                "UPDATE players SET stars=? WHERE id=?",
+                (stars_from_legacy_stats(dict(row)), row["id"]),
+            )
+
+    # One-time fix: the first stars backfill mapped untouched FIFA defaults
+    # (overall 50) to 2 stars. Mid-level is 3.
+    if get_setting(cur, "stars_default_fix_v1", None) is None:
+        cur.execute(
+            """
+            UPDATE players SET stars = 3.0
+            WHERE stars = 2
+              AND COALESCE(pace, 50) = 50
+              AND COALESCE(shooting, 50) = 50
+              AND COALESCE(passing, 50) = 50
+              AND COALESCE(dribbling, 50) = 50
+              AND COALESCE(defending, 50) = 50
+              AND COALESCE(physical, 50) = 50
+            """
+        )
+        set_setting(cur, "stars_default_fix_v1", "1")
 
     cur.execute("PRAGMA table_info(teams)")
     team_cols = {row[1] for row in cur.fetchall()}
@@ -193,11 +221,10 @@ def rows_to_list(rows):
     return [dict(r) for r in rows]
 
 
-# ---------------------------------------------------------- FIFA-style cards ----
-# Every player carries 6 sub-stats (0-99, like FIFA Ultimate Team); "overall" and
-# "card_tier" are derived from those rather than stored separately, so there's
-# only one source of truth. Used by players.py, teams.py, and auction.py to
-# enrich any player dict before it goes back to the frontend.
+# ---------------------------------------------------------- Player cards ----
+# Organizers set a 1–5 star level (top players are 5). Card gold/silver/bronze
+# is derived from that so the existing card chrome still works. The six FIFA
+# skill columns remain in older databases but are no longer used in the UI.
 
 CARD_STAT_FIELDS = ["pace", "shooting", "passing", "dribbling", "defending", "physical"]
 
@@ -210,27 +237,55 @@ def clamp_stat(value, default=50):
     return max(0, min(99, value))
 
 
+def clamp_stars(value, default=3.0):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return default
+    value = int(value * 2 + 0.5) / 2
+    return max(2.0, min(5.0, value))
+
+
 def compute_overall(player):
     values = [clamp_stat(player.get(f)) for f in CARD_STAT_FIELDS]
     return round(sum(values) / len(values))
 
 
-def card_tier(overall):
-    if overall >= 75:
+def stars_from_legacy_stats(player):
+    overall = compute_overall(player)
+    # Unset FIFA defaults average to 50 — treat that as a mid (3-star) player,
+    # not a 2-star, so existing rosters don't all drop a level.
+    if overall == 50:
+        return 3.0
+    if overall >= 80:
+        return 5.0
+    if overall >= 70:
+        return 4.0
+    if overall >= 60:
+        return 3.0
+    if overall >= 50:
+        return 2.0
+    return 2.0
+
+
+def card_tier(stars):
+    if stars >= 5:
+        return "elite"
+    if stars >= 4:
         return "gold"
-    if overall >= 65:
+    if stars >= 3:
         return "silver"
     return "bronze"
 
 
 def enrich_player(player):
-    """Add derived FIFA-card fields (overall rating, tier) to a player dict."""
+    """Add derived card-tier from the organizer-set star rating."""
     if player is None:
         return None
     player = dict(player)
-    overall = compute_overall(player)
-    player["overall"] = overall
-    player["card_tier"] = card_tier(overall)
+    stars = clamp_stars(player.get("stars"), 3.0)
+    player["stars"] = stars
+    player["card_tier"] = card_tier(stars)
     return player
 
 

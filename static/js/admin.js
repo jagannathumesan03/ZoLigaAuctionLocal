@@ -498,13 +498,14 @@ function renderSpotlight() {
   container.innerHTML = `
     <div class="spotlight fifa-card ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
-      ${ovrBadgeHtml(current)}
       ${auctionTimerHtml(current)}
       <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
       <div class="info">
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
+        ${ratingBadgeHtml(current, 'rating-badge-lg')}
+        ${starsHtml(current, 'star-rating-lg')}
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
           <span class="eyebrow">Highest live bid</span>
@@ -524,7 +525,6 @@ function renderSpotlight() {
                <span class="muted">${escapeHtml(previous.teamName)}</span>
              </div>`
           : ''}
-        ${statBarsHtml(current)}
         ${current.stats ? `<p class="muted">${escapeHtml(current.stats)}</p>` : ''}
         <div class="player-actions">
           <button class="btn btn-primary btn-sm" type="button" onclick="sellToLeader()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Sell</button>
@@ -824,14 +824,14 @@ function renderPlayersList() {
   if (!list.length) { container.innerHTML = `<div class="empty">No players found.</div>`; return; }
   container.innerHTML = list.map(p => `
     <div class="player-card fifa-card ${cardTierClass(p.card_tier)}">
-      ${ovrBadgeHtml(p)}
+      ${ratingBadgeHtml(p)}
       <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
       <div class="player-name">${escapeHtml(p.name)}</div>
       <div class="player-meta">${escapeHtml(p.role || '')}</div>
+      ${starsHtml(p)}
       <div class="player-price">${fmtMoney(p.base_price)}${p.sold_price ? ' &rarr; ' + fmtMoney(p.sold_price) : ''}</div>
       ${statusBadge(p.status)}
       ${p.team_name ? `<div class="player-meta">Team: ${escapeHtml(p.team_name)}</div>` : ''}
-      ${statGridHtml(p)}
       <div class="player-actions">
         <button class="btn btn-sm" onclick="openPlayerModal(${p.id})">Edit</button>
         ${p.status !== 'sold' ? `<button class="btn btn-primary btn-sm" onclick="openAssignModal(${p.id})">Assign</button>` : ''}
@@ -853,12 +853,9 @@ function openPlayerModal(id) {
     document.getElementById('playerRole').value = p.role || 'Forward';
     document.getElementById('playerBasePrice').value = p.base_price;
     document.getElementById('playerStats').value = p.stats || '';
-    document.getElementById('playerPace').value = p.pace ?? 50;
-    document.getElementById('playerShooting').value = p.shooting ?? 50;
-    document.getElementById('playerPassing').value = p.passing ?? 50;
-    document.getElementById('playerDribbling').value = p.dribbling ?? 50;
-    document.getElementById('playerDefending').value = p.defending ?? 50;
-    document.getElementById('playerPhysical').value = p.physical ?? 50;
+    document.getElementById('playerStars').value = String(starValue(p));
+  } else {
+    document.getElementById('playerStars').value = '3';
   }
   document.getElementById('playerModalOverlay').style.display = 'flex';
 }
@@ -872,12 +869,7 @@ async function submitPlayerForm(e) {
   fd.append('role', document.getElementById('playerRole').value);
   fd.append('base_price', document.getElementById('playerBasePrice').value);
   fd.append('stats', document.getElementById('playerStats').value);
-  fd.append('pace', document.getElementById('playerPace').value);
-  fd.append('shooting', document.getElementById('playerShooting').value);
-  fd.append('passing', document.getElementById('playerPassing').value);
-  fd.append('dribbling', document.getElementById('playerDribbling').value);
-  fd.append('defending', document.getElementById('playerDefending').value);
-  fd.append('physical', document.getElementById('playerPhysical').value);
+  fd.append('stars', document.getElementById('playerStars').value);
   const photo = document.getElementById('playerPhoto').files[0];
   if (photo) fd.append('photo', photo);
 
@@ -1101,36 +1093,37 @@ function placeholderImg() {
   );
 }
 
-// ---------- FIFA-style card helpers ----------
-// player.overall / player.card_tier are computed server-side (see
-// backend/database.py's enrich_player); these just turn them into markup
-// shared by the player-pool cards, the auction queue cards, and the spotlight.
+// ---------- Player card helpers ----------
+// Organizers set player.stars (2.0–5.0, half-step). card_tier is derived server-side.
 function cardTierClass(tier) {
   return 'card-' + (tier || 'bronze');
 }
-function ovrBadgeHtml(p) {
-  if (p.overall === undefined || p.overall === null) return '';
-  return `<div class="ovr-badge ${cardTierClass(p.card_tier)}"><span class="ovr-value">${p.overall}</span><span class="ovr-label">OVR</span></div>`;
+function starValue(p) {
+  const n = parseFloat(p && p.stars);
+  if (!Number.isFinite(n)) return 3;
+  return Math.max(2, Math.min(5, Math.round(n * 2) / 2));
 }
-function statGridHtml(p) {
-  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
-  return `<div class="stat-grid">${stats.map(([label, val]) =>
-    `<div class="stat-item"><span class="stat-label">${label}</span><span class="stat-value">${val ?? '-'}</span></div>`
-  ).join('')}</div>`;
+function ratingLabel(p) {
+  return starValue(p).toFixed(1).replace(/\.0$/, '');
 }
-// Compact bar-meter version used in the spotlight hero, where the six
-// sub-stats need to be scannable without competing with the name/bid.
-function statBarsHtml(p) {
-  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
-  return `<div class="stat-bars">${stats.map(([label, val]) => {
-    const pct = Math.max(0, Math.min(100, val ?? 0));
-    return `
-      <div class="stat-bar-row">
-        <span class="stat-bar-label">${label}</span>
-        <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
-        <span class="stat-bar-value">${val ?? '-'}</span>
-      </div>`;
-  }).join('')}</div>`;
+function starsHtml(p, extraClass) {
+  const value = starValue(p);
+  const cls = extraClass ? ` ${extraClass}` : '';
+  const stars = [];
+  for (let i = 1; i <= 5; i += 1) {
+    if (value >= i) {
+      stars.push('<span class="star-glyph is-full">★</span>');
+    } else if (value >= i - 0.5) {
+      stars.push('<span class="star-glyph is-half"><span class="star-right">★</span><span class="star-left">★</span></span>');
+    } else {
+      stars.push('<span class="star-glyph is-empty">★</span>');
+    }
+  }
+  return `<span class="star-rating${cls}" aria-label="${value} of 5 stars">${stars.join('')}</span>`;
+}
+function ratingBadgeHtml(p, extraClass) {
+  const cls = extraClass ? ` ${extraClass}` : '';
+  return `<div class="rating-badge ${cardTierClass(p.card_tier)}${cls}" aria-label="Player value ${starValue(p)} of 5">${ratingLabel(p)}</div>`;
 }
 
 function relativeTime(ts) {

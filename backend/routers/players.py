@@ -13,7 +13,9 @@ from backend.database import (
     row_to_dict,
     enrich_player,
     enrich_players,
+    clamp_stars,
     clamp_stat,
+    stars_from_legacy_stats,
     CARD_STAT_FIELDS,
 )
 from backend.auth import require_admin, require_any
@@ -79,25 +81,18 @@ def create_player(
     role: str = Form(""),
     base_price: int = Form(0),
     stats: str = Form(""),
-    pace: int = Form(50),
-    shooting: int = Form(50),
-    passing: int = Form(50),
-    dribbling: int = Form(50),
-    defending: int = Form(50),
-    physical: int = Form(50),
+    stars: float = Form(3.0),
     photo: Optional[UploadFile] = File(None),
     _=Depends(require_admin),
 ):
     photo_url = save_photo(photo) if (photo and photo.filename) else ""
-    card_stats = [clamp_stat(pace), clamp_stat(shooting), clamp_stat(passing),
-                  clamp_stat(dribbling), clamp_stat(defending), clamp_stat(physical)]
+    star_rating = clamp_stars(stars)
     with db_cursor() as cur:
         cur.execute(
             """INSERT INTO players
-               (name, photo_url, role, base_price, stats, status,
-                pace, shooting, passing, dribbling, defending, physical)
-               VALUES (?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?)""",
-            (name, photo_url, role, base_price, stats, *card_stats),
+               (name, photo_url, role, base_price, stats, status, stars)
+               VALUES (?, ?, ?, ?, ?, 'waiting', ?)""",
+            (name, photo_url, role, base_price, stats, star_rating),
         )
         player_id = cur.lastrowid
         cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
@@ -112,17 +107,11 @@ def update_player(
     role: str = Form(""),
     base_price: int = Form(0),
     stats: str = Form(""),
-    pace: int = Form(50),
-    shooting: int = Form(50),
-    passing: int = Form(50),
-    dribbling: int = Form(50),
-    defending: int = Form(50),
-    physical: int = Form(50),
+    stars: float = Form(3.0),
     photo: Optional[UploadFile] = File(None),
     _=Depends(require_admin),
 ):
-    card_stats = [clamp_stat(pace), clamp_stat(shooting), clamp_stat(passing),
-                  clamp_stat(dribbling), clamp_stat(defending), clamp_stat(physical)]
+    star_rating = clamp_stars(stars)
     with db_cursor() as cur:
         cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
         existing = cur.fetchone()
@@ -133,10 +122,9 @@ def update_player(
             photo_url = save_photo(photo)
         cur.execute(
             """UPDATE players
-               SET name=?, photo_url=?, role=?, base_price=?, stats=?,
-                   pace=?, shooting=?, passing=?, dribbling=?, defending=?, physical=?
+               SET name=?, photo_url=?, role=?, base_price=?, stats=?, stars=?
                WHERE id=?""",
-            (name, photo_url, role, base_price, stats, *card_stats, player_id),
+            (name, photo_url, role, base_price, stats, star_rating, player_id),
         )
         cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
         return enrich_player(row_to_dict(cur.fetchone()))
@@ -170,13 +158,19 @@ async def bulk_upload_csv(request: Request, file: UploadFile = File(...), _=Depe
                 base_price = int(float(row.get("base_price") or 0))
             except ValueError:
                 base_price = 0
-            card_stats = [clamp_stat(row.get(f)) for f in CARD_STAT_FIELDS]
+            if (row.get("stars") or "").strip():
+                star_rating = clamp_stars(row.get("stars"), 3.0)
+            elif any((row.get(f) or "").strip() for f in CARD_STAT_FIELDS):
+                star_rating = stars_from_legacy_stats(
+                    {f: clamp_stat(row.get(f)) for f in CARD_STAT_FIELDS}
+                )
+            else:
+                star_rating = 3.0
             cur.execute(
                 """INSERT INTO players
-                   (name, photo_url, role, base_price, stats, status,
-                    pace, shooting, passing, dribbling, defending, physical)
-                   VALUES (?, '', ?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?)""",
-                (name, role, base_price, stats, *card_stats),
+                   (name, photo_url, role, base_price, stats, status, stars)
+                   VALUES (?, '', ?, ?, ?, 'waiting', ?)""",
+                (name, role, base_price, stats, star_rating),
             )
             created += 1
     return {"created": created, "errors": errors}

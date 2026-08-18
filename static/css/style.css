@@ -894,15 +894,6 @@ h1, h2, h3 { letter-spacing: 0; }
 .result-team { margin-top: 6px; font-size: 1rem; color: var(--text-dim); }
 .result-team b { color: var(--text); }
 
-/* Six sub-stats as compact bar meters -- scannable at a glance, but sized to
-   stay clearly secondary to the name/current bid above them. */
-.stat-bars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px 18px; margin-top: 16px; max-width: 440px; }
-.stat-bar-row { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; }
-.stat-bar-label { flex: 0 0 26px; color: var(--text-dim); font-weight: 800; letter-spacing: 0.02em; }
-.stat-bar-track { flex: 1; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.stat-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
-.stat-bar-value { flex: 0 0 20px; text-align: right; color: var(--text); font-weight: 800; }
-
 .bid-history-panel, .bid-activity-card { background: linear-gradient(135deg, rgba(16, 28, 40, 0.98), rgba(17, 38, 45, 0.92)); }
 .activity-caption { color: var(--text-dim); font-size: 0.71rem; }
 .bid-history-log { max-height: 250px; gap: 7px; padding-right: 3px; }
@@ -1004,7 +995,6 @@ h1, h2, h3 { letter-spacing: 0; }
   .spotlight-player-photo { width: 100%; height: min(54vw, 230px); flex-basis: auto; }
   .spotlight .info h2 { font-size: 1.72rem; }
   .bid-amount-display { font-size: 2.35rem; }
-  .stat-bars { grid-template-columns: repeat(2, 1fr); max-width: none; }
   .grid-teams, .grid-players { grid-template-columns: 1fr; }
   .bid-tier-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .bid-tier-btn { min-width: 0; padding-inline: 6px; }
@@ -1290,9 +1280,6 @@ h1, h2, h3 { letter-spacing: 0; }
 .next-player span { margin-top: 5px; color: #a8bad8; font-size: 0.7rem; }
 .next-player small { margin-top: 7px; color: #c9d5f1; font-size: 0.66rem; }
 .next-player-empty { display: grid; min-height: 125px; place-items: center; color: var(--text-dim); font-size: 0.75rem; text-align: center; }
-.next-player .ovr-badge { top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 5px; }
-.next-player .ovr-badge .ovr-value { font-size: 0.6rem; }
-.next-player .ovr-badge .ovr-label { display: none; }
 
 .viewer-page .tabs { margin: 26px 0 14px; }
 .viewer-page .section-heading.compact { align-items: center; margin: 0 0 12px; }
@@ -1435,10 +1422,6 @@ h1, h2, h3 { letter-spacing: 0; }
 .sale-celebration-price {
   margin-top: 8px; font-size: clamp(2.2rem, 5vw, 3.1rem); font-weight: 800; color: var(--accent);
 }
-.sale-celebration .ovr-badge {
-  position: static; width: 64px; height: 64px; margin-top: 4px; border-radius: 12px;
-}
-.sale-celebration .ovr-badge .ovr-value { font-size: 1.5rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .sale-celebration,
@@ -1456,62 +1439,97 @@ h1, h2, h3 { letter-spacing: 0; }
   .sale-celebration-price { font-size: 2rem; }
 }
 
-/* ---------- FIFA-style player cards ---------- */
-/* Tier is derived from the computed "overall" rating (see backend enrich_player /
-   admin.js & viewer.js's cardTierClass): <65 bronze, 65-74 silver, >=75 gold.
-   .fifa-card is layered onto .player-card, .spotlight and .next-player so
-   they all keep their existing layout/behavior and just pick up a
-   tier-tinted border plus the OVR badge / stat markup. */
+/* ---------- Player cards (star level) ---------- */
+/* Organizer value bands: 2/2.5 bronze, 3/3.5 silver, 4/4.5 gold, 5 elite. */
 .fifa-card { position: relative; overflow: visible; }
 .fifa-card.card-bronze { border-color: rgba(205, 127, 50, 0.55); box-shadow: 0 0 0 1px rgba(205, 127, 50, 0.12); }
 .fifa-card.card-silver { border-color: rgba(192, 200, 210, 0.6); box-shadow: 0 0 0 1px rgba(192, 200, 210, 0.16); }
 .fifa-card.card-gold { border-color: rgba(255, 200, 60, 0.7); box-shadow: 0 0 0 1px rgba(255, 200, 60, 0.18), 0 0 10px rgba(255, 200, 60, 0.08); }
+.fifa-card.card-elite { border-color: rgba(177, 128, 255, 0.8); box-shadow: 0 0 0 1px rgba(177, 128, 255, 0.2), 0 0 16px rgba(177, 128, 255, 0.16); }
 .player-card.fifa-card:hover.card-gold { box-shadow: 0 0 0 1px rgba(255, 200, 60, 0.26), 0 12px 26px rgba(255, 200, 60, 0.12); }
+.player-card.fifa-card:hover.card-elite { box-shadow: 0 0 0 1px rgba(177, 128, 255, 0.34), 0 12px 30px rgba(177, 128, 255, 0.18); }
 
-.ovr-badge {
-  position: absolute; top: 8px; left: 8px; z-index: 2;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  width: 40px; height: 40px; border-radius: 8px;
-  font-weight: 800; line-height: 1;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+.rating-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 9px;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
-.ovr-badge .ovr-value { font-size: 1rem; }
-.ovr-badge .ovr-label { margin-top: 1px; font-size: 0.5rem; letter-spacing: 0.06em; opacity: 0.85; }
-.ovr-badge.card-bronze { background: linear-gradient(160deg, #cd7f32, #8a5322); color: #fff2e2; }
-.ovr-badge.card-silver { background: linear-gradient(160deg, #e4e9ee, #a9b3bd); color: #1a2330; }
-.ovr-badge.card-gold { background: linear-gradient(160deg, #ffe18a, #d99a1b); color: #2b1c00; }
+.rating-badge.card-bronze { background: linear-gradient(160deg, #cd7f32, #8a5322); color: #fff2e2; }
+.rating-badge.card-silver { background: linear-gradient(160deg, #e4e9ee, #a9b3bd); color: #1a2330; }
+.rating-badge.card-gold { background: linear-gradient(160deg, #ffe18a, #d99a1b); color: #2b1c00; }
+.rating-badge.card-elite { background: linear-gradient(160deg, #e8d8ff, #a66bff); color: #250845; }
+.rating-badge-lg { top: 14px; left: 14px; min-width: 56px; height: 56px; border-radius: 12px; font-size: 1.18rem; }
 
-.spotlight .ovr-badge { top: 14px; left: 14px; width: 52px; height: 52px; border-radius: 10px; }
-.spotlight .ovr-badge .ovr-value { font-size: 1.3rem; }
-
-.ovr-chip {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 26px; height: 20px; padding: 0 5px; margin-left: 8px;
-  border-radius: 4px; font-size: 0.66rem; font-weight: 800;
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18em;
+  margin: 8px 0 3px;
+  font-size: 1.35rem;
+  line-height: 1;
 }
-.ovr-chip.card-bronze { background: rgba(205, 127, 50, 0.22); color: #e3a06b; }
-.ovr-chip.card-silver { background: rgba(192, 200, 210, 0.22); color: #dfe4e9; }
-.ovr-chip.card-gold { background: rgba(255, 200, 60, 0.22); color: #ffd873; }
-
-.stat-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px;
-  margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border);
+.star-rating .star-glyph {
+  position: relative;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
 }
-.stat-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; }
-.stat-label { color: var(--text-dim); font-weight: 700; letter-spacing: 0.04em; }
-.stat-value { color: var(--text); font-weight: 800; }
+.star-rating .star-glyph.is-full {
+  color: #ffd873;
+  text-shadow: 0 0 10px rgba(255, 200, 60, 0.38);
+}
+.star-rating .star-glyph.is-empty {
+  color: rgba(232, 238, 252, 0.34);
+}
+.star-rating .star-glyph.is-half .star-right {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: rgba(232, 238, 252, 0.34);
+}
+.star-rating .star-glyph.is-half .star-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  overflow: hidden;
+  color: #ffd873;
+  text-shadow: 0 0 10px rgba(255, 200, 60, 0.38);
+}
+.star-rating-lg { font-size: 1.95rem; margin: 10px 0 7px; }
+.star-rating-sm { font-size: 0.95rem; margin: 0; }
+.star-rating-inline { display: inline-flex; margin: 0 0 0 4px; font-size: 1rem; vertical-align: middle; }
+.player-card .star-rating { margin-top: 10px; }
+.spotlight .star-rating-lg { margin: 12px 0 8px; }
+.sale-celebration .star-rating { margin: 10px 0 5px; font-size: 2rem; }
 
-.card-stat-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.card-stat-inputs .field { margin-bottom: 0; }
-.card-stat-inputs input { padding: 7px 8px; text-align: center; }
-
-@media (max-width: 680px) {
-  .card-stat-inputs { grid-template-columns: repeat(2, 1fr); }
+.spotlight .info .rating-badge-lg,
+.result-state .info .rating-badge-lg,
+.sale-celebration .rating-badge-lg {
+  position: static;
+  margin: 8px 0 2px;
 }
 
-[data-theme="light"] .ovr-badge.card-silver { color: #22303e; }
-[data-theme="light"] .ovr-badge.card-gold { color: #2b1c00; }
-[data-theme="light"] .stat-grid { border-top-color: var(--border); }
+[data-theme="light"] .star-rating .star-glyph.is-full,
+[data-theme="light"] .star-rating .star-glyph.is-half .star-left { color: #d4a017; text-shadow: none; }
+[data-theme="light"] .star-rating .star-glyph.is-empty,
+[data-theme="light"] .star-rating .star-glyph.is-half .star-right { color: rgba(19, 34, 54, 0.3); }
+[data-theme="light"] .rating-badge.card-silver { color: #22303e; }
+[data-theme="light"] .rating-badge.card-gold { color: #2b1c00; }
+[data-theme="light"] .rating-badge.card-elite { color: #2f1450; }
 
 /* ---------- Theme controls ---------- */
 .theme-toggle { min-width: 90px; }
@@ -1713,6 +1731,7 @@ body.pack-reveal-open { overflow: hidden; }
 .slot-tile.card-bronze { background: linear-gradient(180deg, rgba(80, 45, 18, 0.55), rgba(16, 28, 46, 0.35)); }
 .slot-tile.card-silver { background: linear-gradient(180deg, rgba(70, 80, 95, 0.5), rgba(16, 28, 46, 0.35)); }
 .slot-tile.card-gold { background: linear-gradient(180deg, rgba(90, 70, 18, 0.55), rgba(16, 28, 46, 0.35)); }
+.slot-tile.card-elite { background: linear-gradient(180deg, rgba(88, 56, 140, 0.58), rgba(16, 28, 46, 0.35)); }
 
 .slot-tile-photo {
   width: 72px; height: 88px;
@@ -1725,11 +1744,13 @@ body.pack-reveal-open { overflow: hidden; }
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 28px; padding: 2px 6px;
   border-radius: 5px; font-size: 0.72rem; font-weight: 900;
-  background: rgba(255, 255, 255, 0.1); color: #eef4ff;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.1); color: #ffd873;
 }
 .slot-tile.card-bronze .slot-tile-ovr { background: linear-gradient(160deg, #cd7f32, #8a5322); }
 .slot-tile.card-silver .slot-tile-ovr { background: linear-gradient(160deg, #e4e9ee, #a9b3bd); color: #1a2330; }
 .slot-tile.card-gold .slot-tile-ovr { background: linear-gradient(160deg, #ffe18a, #d99a1b); color: #2b1c00; }
+.slot-tile.card-elite .slot-tile-ovr { background: linear-gradient(160deg, #e8d8ff, #a66bff); color: #250845; }
 .slot-tile-name {
   max-width: 100%;
   font-size: 0.86rem; font-weight: 800; color: #fff;
