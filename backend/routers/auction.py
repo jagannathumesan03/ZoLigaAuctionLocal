@@ -12,8 +12,13 @@ from backend.database import (
     enrich_player,
     get_auction_timer_seconds,
     is_auction_timer_enabled,
-    remaining_player_base_prices,
     max_spendable,
+    is_valid_bid_amount,
+    next_standard_bid,
+    PLAYER_BASE_PRICE_CR,
+    BID_STEP_LOW_CR,
+    BID_STEP_HIGH_CR,
+    BID_HIGH_THRESHOLD_CR,
 )
 from backend.auth import require_admin, require_any
 from backend.sse import broadcaster
@@ -320,21 +325,33 @@ async def place_bid(body: BidBody, request: Request, _=Depends(require_admin)):
         if filled >= team["slots_max"]:
             raise HTTPException(status_code=400, detail=f"{team['name']} already has {team['slots_max']} players and can't bid")
 
-        current_amount = player["current_bid_amount"] or player["base_price"]
-        if body.amount <= current_amount:
-            raise HTTPException(status_code=400, detail=f"Bid must be higher than the current bid of {current_amount}")
-
+        current_amount = player["current_bid_amount"] or player["base_price"] or PLAYER_BASE_PRICE_CR
+        has_live_bid = bool(player["current_bid_team_id"])
         max_spend = max_spendable(
             team["purse_remaining"],
             team["slots_max"],
             filled,
-            remaining_player_base_prices(cur),
         )
-        if body.amount > max_spend:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{team['name']} can spend at most {max_spend} on this player (must keep enough for remaining slots at the cheapest remaining base prices)",
-            )
+        if not is_valid_bid_amount(body.amount, current_amount, max_spend, has_live_bid):
+            next_std = next_standard_bid(current_amount) if has_live_bid else current_amount
+            if body.amount > max_spend:
+                detail = (
+                    f"{team['name']} can spend at most ₹{max_spend} Cr on this player "
+                    f"(must keep ₹{PLAYER_BASE_PRICE_CR} Cr for each remaining squad slot)"
+                )
+            elif has_live_bid and body.amount <= current_amount:
+                detail = f"Bid must be higher than the current bid of ₹{current_amount} Cr"
+            elif max_spend < next_std:
+                detail = (
+                    f"{team['name']} may only place an all-in bid of ₹{max_spend} Cr "
+                    f"(below the next standard bid of ₹{next_std} Cr)"
+                )
+            else:
+                detail = (
+                    f"Bid must land on a valid increment (₹{BID_STEP_LOW_CR} Cr up to ₹{BID_HIGH_THRESHOLD_CR} Cr, "
+                    f"then ₹{BID_STEP_HIGH_CR} Cr). Next standard bid is ₹{next_std} Cr"
+                )
+            raise HTTPException(status_code=400, detail=detail)
 
         cur.execute(
             "INSERT INTO bid_history (player_id, team_id, amount) VALUES (?, ?, ?)",
@@ -415,8 +432,12 @@ def _try_assign(cur, player_id, team_id, sold_price):
     if filled >= team["slots_max"]:
         raise ValueError(f"{team['name']} already has {team['slots_max']} players")
 
-    if sold_price > team["purse_remaining"]:
-        raise ValueError(f"{team['name']} does not have enough purse remaining")
+    max_spend = max_spendable(team["purse_remaining"], team["slots_max"], filled)
+    if sold_price > max_spend:
+        raise ValueError(
+            f"{team['name']} can spend at most ₹{max_spend} Cr on this player "
+            f"(must keep ₹{PLAYER_BASE_PRICE_CR} Cr for each remaining squad slot)"
+        )
 
     cur.execute(
         "UPDATE players SET status='sold', sold_price=?, team_id=?, auction_ends_at=NULL WHERE id=?",

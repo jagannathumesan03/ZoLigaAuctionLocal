@@ -499,12 +499,14 @@ function renderSpotlight() {
     <div class="spotlight fifa-card ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
       ${auctionTimerHtml(current)}
-      <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      <div class="spotlight-photo-wrap">
+        ${ratingBadgeHtml(current)}
+        <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      </div>
       <div class="info">
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
-        ${ratingBadgeHtml(current, 'rating-badge-lg')}
         ${starsHtml(current, 'star-rating-lg')}
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
@@ -543,21 +545,46 @@ function renderSpotlight() {
 }
 
 // ---------- Live bidding panel ----------
-function tierIncrement(amount) {
-  if (amount < 100000) return 10000;
-  if (amount < 500000) return 25000;
-  if (amount < 1000000) return 50000;
-  if (amount < 5000000) return 100000;
-  return 250000;
+const PLAYER_BASE_PRICE_CR = 30;
+const BID_STEP_LOW_CR = 5;
+const BID_STEP_HIGH_CR = 10;
+const BID_HIGH_THRESHOLD_CR = 200;
+
+function bidIncrement(amount) {
+  return Number(amount) >= BID_HIGH_THRESHOLD_CR ? BID_STEP_HIGH_CR : BID_STEP_LOW_CR;
+}
+function nextStandardBid(amount) {
+  return Number(amount || 0) + bidIncrement(amount);
+}
+function addBidSteps(amount, steps) {
+  let value = Number(amount || 0);
+  for (let i = 0; i < Math.max(0, steps); i += 1) value = nextStandardBid(value);
+  return value;
+}
+function isOnBidGrid(amount) {
+  const value = Number(amount || 0);
+  if (value < PLAYER_BASE_PRICE_CR) return false;
+  if (value <= BID_HIGH_THRESHOLD_CR) return (value - PLAYER_BASE_PRICE_CR) % BID_STEP_LOW_CR === 0;
+  return (value - BID_HIGH_THRESHOLD_CR) % BID_STEP_HIGH_CR === 0;
+}
+function hasLiveBid(current) {
+  return !!(current && current.current_bid_team_id);
+}
+function nextRaiseAmount(current) {
+  const bidAmount = current.current_bid_amount || current.base_price || PLAYER_BASE_PRICE_CR;
+  return hasLiveBid(current) ? nextStandardBid(bidAmount) : bidAmount;
 }
 
 function syncDraftBidAmount(current) {
   const bidAmount = current.current_bid_amount || current.base_price;
-  const nextAmount = bidAmount + tierIncrement(bidAmount);
+  const nextAmount = nextRaiseAmount(current);
+  const live = hasLiveBid(current);
+  const staleDraft = live
+    ? (!state.draftBidAmount || state.draftBidAmount <= bidAmount)
+    : (!state.draftBidAmount || state.draftBidAmount < bidAmount);
   const needsReset = state.draftBidAuctionId !== current.id
     || state.draftBidFloor !== bidAmount
-    || !state.draftBidAmount
-    || state.draftBidAmount <= bidAmount;
+    || staleDraft;
   if (needsReset) {
     state.draftBidAmount = nextAmount;
     state.draftBidAuctionId = current.id;
@@ -578,23 +605,26 @@ function renderBidPanel() {
   }
 
   const { bidAmount, nextAmount, draftAmount } = syncDraftBidAmount(current);
-  const inc = tierIncrement(bidAmount);
+  const live = hasLiveBid(current);
+  const jump2 = addBidSteps(bidAmount, live ? 2 : 2);
+  const jump5 = addBidSteps(bidAmount, 5);
   const hasBids = !!current.current_bid_team_id;
   const hasHistory = (current.history || []).length > 0;
 
   const teamTilesHtml = state.teams.map(t => {
     const full = t.squad.length >= t.slots_max;
     const spend = spendBudget(t);
-    const overMax = draftAmount > spend.max;
-    const cantAfford = t.purse_remaining < draftAmount;
+    const cannotRaise = live ? spend.max <= bidAmount : spend.max < bidAmount;
+    const canAllIn = spend.max < nextAmount && !cannotRaise;
+    const placeAmount = draftAmount > spend.max && canAllIn ? spend.max : draftAmount;
     const leading = current.current_bid_team_id === t.id;
-    const disabled = full || overMax;
+    const disabled = full || cannotRaise;
     const reason = full
       ? 'Squad full'
-      : (cantAfford ? 'Insufficient purse' : (overMax ? 'Over max spend' : `Bid ${fmtMoney(draftAmount)}`));
+      : (cannotRaise ? 'Over max spend' : (canAllIn && draftAmount > spend.max ? `All-in ${fmtMoney(spend.max)}` : `Bid ${fmtMoney(placeAmount)}`));
     const pct = t.purse_total ? Math.max(0, Math.min(100, Math.round((t.purse_remaining / t.purse_total) * 100))) : 0;
     const keepHint = spend.keepSlots
-      ? `Keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more`
+      ? `Keeps ${fmtMoney(spend.reserve)} (${fmtMoney(PLAYER_BASE_PRICE_CR)} × ${spend.keepSlots})`
       : 'Last slot — full purse';
     return `
       <button type="button"
@@ -609,7 +639,7 @@ function renderBidPanel() {
           <span class="auction-team-tile-max">Max spend ${fmtMoney(spend.max)}</span>
           <span class="auction-team-tile-keep">${keepHint}</span>
           <span class="purse-bar"><span class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></span></span>
-          <span class="auction-team-tile-action">${disabled ? reason : fmtMoney(draftAmount)}</span>
+          <span class="auction-team-tile-action">${disabled ? reason : (canAllIn && draftAmount > spend.max ? `All-in ${fmtMoney(spend.max)}` : fmtMoney(placeAmount))}</span>
         </div>
       </button>`;
   }).join('');
@@ -639,13 +669,13 @@ function renderBidPanel() {
     <div class="bid-amount-editor">
       <label for="manualBidAmount">Bid amount (editable)</label>
       <div class="bid-amount-editor-row">
-        <input type="number" id="manualBidAmount" min="${bidAmount + 1}" step="1000" value="${draftAmount}" oninput="onManualBidInput(this)">
+        <input type="number" id="manualBidAmount" min="${live ? bidAmount + 1 : bidAmount}" step="5" value="${draftAmount}" oninput="onManualBidInput(this)">
         <strong class="bid-amount-preview" id="manualBidPreview">${fmtMoney(draftAmount)}</strong>
       </div>
       <div class="bid-tier-buttons">
-        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${nextAmount})">${fmtMoney(nextAmount)}<small>Min raise</small></button>
-        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${bidAmount + inc * 2})">${fmtMoney(bidAmount + inc * 2)}<small>+${fmtMoney(inc * 2)}</small></button>
-        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${bidAmount + inc * 5})">${fmtMoney(bidAmount + inc * 5)}<small>+${fmtMoney(inc * 5)}</small></button>
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${nextAmount})">${fmtMoney(nextAmount)}<small>${live ? 'Min raise' : 'Opening bid'}</small></button>
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${jump2})">${fmtMoney(jump2)}<small>Jump +2 steps</small></button>
+        <button type="button" class="btn bid-tier-btn" onclick="setManualBidAmount(${jump5})">${fmtMoney(jump5)}<small>Jump +5 steps</small></button>
       </div>
     </div>
     <label>Teams — tap a tile to place the amount above</label>
@@ -685,20 +715,34 @@ function setManualBidAmount(amount) {
 async function oneClickBid(teamId) {
   const current = state.currentAuction;
   if (!current) return;
-  const bidAmount = current.current_bid_amount || current.base_price;
+  const bidAmount = current.current_bid_amount || current.base_price || PLAYER_BASE_PRICE_CR;
+  const live = hasLiveBid(current);
+  const nextStd = nextRaiseAmount(current);
   const input = document.getElementById('manualBidAmount');
   const typed = input ? parseInt(input.value, 10) : NaN;
-  const amount = Number.isFinite(typed) ? typed : (state.draftBidAmount || bidAmount + tierIncrement(bidAmount));
-  if (amount <= bidAmount) {
-    toast(`Bid must be higher than ${fmtMoney(bidAmount)}`, true);
+  let amount = Number.isFinite(typed) ? typed : (state.draftBidAmount || nextStd);
+  const team = state.teams.find(candidate => candidate.id === teamId);
+  if (!team) return;
+  const spend = maxSpend(team);
+  if (live ? amount <= bidAmount : amount < bidAmount) {
+    toast(live ? `Bid must be higher than ${fmtMoney(bidAmount)}` : `Bid must be at least ${fmtMoney(bidAmount)}`, true);
     return;
+  }
+  if (amount > spend) {
+    if (spend < nextStd && spend > (live ? bidAmount : bidAmount - 1)) {
+      amount = spend;
+    } else {
+      toast(`${team.name} can spend at most ${fmtMoney(spend)} (must keep ${fmtMoney(PLAYER_BASE_PRICE_CR)} for each remaining squad slot)`, true);
+      return;
+    }
+  }
+  if (amount !== spend || spend >= nextStd) {
+    if (!isOnBidGrid(amount) || amount < nextStd) {
+      toast(`Bid must land on a valid increment. Next standard bid is ${fmtMoney(nextStd)} (₹5 Cr to ₹200 Cr, then ₹10 Cr). All-in allowed only when max spend is below that.`, true);
+      return;
+    }
   }
   state.draftBidAmount = amount;
-  const team = state.teams.find(candidate => candidate.id === teamId);
-  if (team && amount > maxSpend(team)) {
-    toast(`${team.name} can spend at most ${fmtMoney(maxSpend(team))} (must keep enough for remaining slots at the cheapest remaining bases)`, true);
-    return;
-  }
   await placeBid(teamId, amount);
 }
 
@@ -936,7 +980,7 @@ function renderTeamsList() {
           </div>
         </div>
         <div class="team-purse">Remaining: ${fmtMoney(t.purse_remaining)} / ${fmtMoney(t.purse_total)}</div>
-        <div class="team-purse team-max-spend">Max spend: ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more` : ''}</div>
+        <div class="team-purse team-max-spend">Max spend: ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} (${fmtMoney(PLAYER_BASE_PRICE_CR)} × ${spend.keepSlots})` : ''}</div>
         <div class="purse-bar"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         <div class="squad-list">${squadHtml}${emptyHtml}</div>
       </div>`;
@@ -958,8 +1002,8 @@ function openTeamModal(id) {
       ? 'A team password is set. Enter a new one only if you want to change it.'
       : 'No team password yet — set one so the owner can open their manager desk.';
   } else {
-    document.getElementById('teamPurse').value = 10000000;
-    document.getElementById('teamSlots').value = 7;
+    document.getElementById('teamPurse').value = 1000;
+    document.getElementById('teamSlots').value = 8;
     if (hint) hint.textContent = 'Owners use this password on the viewer login to open their manager desk.';
   }
   document.getElementById('teamModalOverlay').style.display = 'flex';
@@ -1051,13 +1095,7 @@ function statusBadge(status) {
 }
 function fmtMoney(v) {
   if (v === null || v === undefined) return '-';
-  return '₹' + Number(v).toLocaleString('en-IN');
-}
-function remainingBasePrices() {
-  return (state.players || [])
-    .filter(p => p.status === 'waiting' || p.status === 'unsold')
-    .map(p => p.base_price || 0)
-    .sort((a, b) => a - b);
+  return '₹' + Number(v).toLocaleString('en-IN') + ' Cr';
 }
 function slotsLeft(team) {
   const filled = team.slots_filled != null ? team.slots_filled : (team.squad || []).length;
@@ -1067,7 +1105,7 @@ function spendBudget(team) {
   const left = slotsLeft(team);
   if (left <= 0) return { max: 0, reserve: 0, keepSlots: 0 };
   const keepSlots = Math.max(0, left - 1);
-  const reserve = remainingBasePrices().slice(0, keepSlots).reduce((sum, price) => sum + price, 0);
+  const reserve = keepSlots * PLAYER_BASE_PRICE_CR;
   return {
     max: Math.max(0, (team.purse_remaining || 0) - reserve),
     reserve,

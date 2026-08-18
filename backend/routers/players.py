@@ -17,6 +17,7 @@ from backend.database import (
     clamp_stat,
     stars_from_legacy_stats,
     CARD_STAT_FIELDS,
+    PLAYER_BASE_PRICE_CR,
 )
 from backend.auth import require_admin, require_any
 
@@ -79,7 +80,7 @@ def create_player(
     request: Request,
     name: str = Form(...),
     role: str = Form(""),
-    base_price: int = Form(0),
+    base_price: int = Form(PLAYER_BASE_PRICE_CR),
     stats: str = Form(""),
     stars: float = Form(3.0),
     photo: Optional[UploadFile] = File(None),
@@ -105,7 +106,7 @@ def update_player(
     request: Request,
     name: str = Form(...),
     role: str = Form(""),
-    base_price: int = Form(0),
+    base_price: int = Form(PLAYER_BASE_PRICE_CR),
     stats: str = Form(""),
     stars: float = Form(3.0),
     photo: Optional[UploadFile] = File(None),
@@ -155,9 +156,11 @@ async def bulk_upload_csv(request: Request, file: UploadFile = File(...), _=Depe
             role = (row.get("role") or "").strip()
             stats = (row.get("stats") or "").strip()
             try:
-                base_price = int(float(row.get("base_price") or 0))
+                base_price = int(float(row.get("base_price") or PLAYER_BASE_PRICE_CR))
             except ValueError:
-                base_price = 0
+                base_price = PLAYER_BASE_PRICE_CR
+            if base_price <= 0:
+                base_price = PLAYER_BASE_PRICE_CR
             if (row.get("stars") or "").strip():
                 star_rating = clamp_stars(row.get("stars"), 3.0)
             elif any((row.get(f) or "").strip() for f in CARD_STAT_FIELDS):

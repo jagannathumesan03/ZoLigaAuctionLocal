@@ -10,9 +10,9 @@ from backend.database import (
     rows_to_list,
     row_to_dict,
     enrich_players,
-    remaining_player_base_prices,
     squad_completion_reserve,
     max_spendable,
+    TEAM_SLOTS,
 )
 from backend.auth import require_admin, require_any, hash_team_password
 
@@ -22,7 +22,7 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "static", "uplo
 UPLOAD_DIR = os.path.abspath(UPLOAD_DIR)
 
 
-def team_with_squad(cur, team_row, remaining_prices=None) -> dict:
+def team_with_squad(cur, team_row) -> dict:
     team = dict(team_row)
     has_password = bool(team.pop("owner_password", None))
     team["has_owner_password"] = has_password
@@ -31,13 +31,11 @@ def team_with_squad(cur, team_row, remaining_prices=None) -> dict:
     team["squad"] = squad
     team["slots_filled"] = len(squad)
     team["slots_remaining"] = max(0, team["slots_max"] - len(squad))
-    prices = remaining_prices if remaining_prices is not None else remaining_player_base_prices(cur)
-    team["max_spend_reserve"] = squad_completion_reserve(team["slots_remaining"], prices)
+    team["max_spend_reserve"] = squad_completion_reserve(team["slots_remaining"])
     team["max_spend"] = max_spendable(
         team["purse_remaining"],
         team["slots_max"],
         len(squad),
-        prices,
     )
     return team
 
@@ -45,9 +43,8 @@ def team_with_squad(cur, team_row, remaining_prices=None) -> dict:
 @router.get("")
 def list_teams(request: Request, _=Depends(require_any)):
     with db_cursor() as cur:
-        prices = remaining_player_base_prices(cur)
         cur.execute("SELECT * FROM teams ORDER BY name")
-        teams = [team_with_squad(cur, r, prices) for r in cur.fetchall()]
+        teams = [team_with_squad(cur, r) for r in cur.fetchall()]
     return teams
 
 
@@ -66,7 +63,7 @@ def create_team(
     request: Request,
     name: str = Form(...),
     purse_total: int = Form(...),
-    slots_max: int = Form(7),
+    slots_max: int = Form(TEAM_SLOTS),
     owner_password: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     _=Depends(require_admin),
@@ -101,7 +98,7 @@ def update_team(
     request: Request,
     name: str = Form(...),
     purse_total: int = Form(...),
-    slots_max: int = Form(7),
+    slots_max: int = Form(TEAM_SLOTS),
     owner_password: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     _=Depends(require_admin),

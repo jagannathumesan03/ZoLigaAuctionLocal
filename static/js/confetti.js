@@ -80,7 +80,7 @@
 
   function fmtMoney(v) {
     if (v === null || v === undefined) return '-';
-    return '₹' + Number(v).toLocaleString('en-IN');
+    return '₹' + Number(v).toLocaleString('en-IN') + ' Cr';
   }
 
   function escapeHtml(str) {
@@ -143,10 +143,10 @@
     overlay.innerHTML = `
       <div class="sale-celebration-card fifa-card ${tierClass}">
         <span class="sale-celebration-tag">Sold!</span>
-        ${ratingBadgeHtml(player, ' rating-badge-lg')}
-        ${starsHtml(player, ' star-rating-lg')}
+        ${ratingBadgeHtml(player)}
         <img class="sale-celebration-photo" src="${player.photo_url || placeholderImg()}" alt="${escapeHtml(player.name || 'Player')}" onerror="this.src='${placeholderImg()}'">
         <h2>${escapeHtml(player.name || 'Player')}</h2>
+        ${starsHtml(player)}
         <div class="sale-celebration-team">${player.team_name ? `to <b>${escapeHtml(player.team_name)}</b>` : ''}</div>
         <div class="sale-celebration-price">${fmtMoney(player.sold_price)}</div>
       </div>`;

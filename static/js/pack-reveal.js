@@ -12,7 +12,7 @@
 
   function fmtMoney(v) {
     if (v === null || v === undefined) return '-';
-    return '₹' + Number(v).toLocaleString('en-IN');
+    return '₹' + Number(v).toLocaleString('en-IN') + ' Cr';
   }
 
   function escapeHtml(str) {

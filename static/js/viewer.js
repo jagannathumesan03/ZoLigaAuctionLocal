@@ -346,10 +346,12 @@ function resultStateHtml(result) {
     return `
       <div class="spotlight result-state is-sold fifa-card ${cardTierClass(p.card_tier)}">
         <span class="result-tag is-sold">Sold</span>
-        <img class="spotlight-player-photo" src="${p.photo_url || placeholderImg()}" alt="${escapeHtml(p.name || 'Player')}">
+        <div class="spotlight-photo-wrap">
+          ${ratingBadgeHtml(p)}
+          <img class="spotlight-player-photo" src="${p.photo_url || placeholderImg()}" alt="${escapeHtml(p.name || 'Player')}">
+        </div>
         <div class="info">
           <h2>${escapeHtml(p.name || 'Player')}</h2>
-          ${ratingBadgeHtml(p, 'rating-badge-lg')}
           ${starsHtml(p, 'star-rating-lg')}
           <div class="result-price">${fmtMoney(p.sold_price)}</div>
           <div class="result-team">to <b>${escapeHtml(p.team_name || 'Unknown team')}</b></div>
@@ -411,12 +413,14 @@ function renderSpotlight() {
   container.innerHTML = `
     <div class="spotlight fifa-card has-bid-panel ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
-      <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      <div class="spotlight-photo-wrap">
+        ${ratingBadgeHtml(current)}
+        <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      </div>
       <div class="info">
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
-        ${ratingBadgeHtml(current, 'rating-badge-lg')}
         ${starsHtml(current, 'star-rating-lg')}
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
@@ -525,19 +529,27 @@ function renderTeamsList() {
             <span class="team-tile-slots">${(t.slots_filled != null ? t.slots_filled : t.squad.length)}/${t.slots_max}</span>
           </div>
           <div class="team-tile-max">Max spend ${fmtMoney(spend.max)}</div>
-          ${spend.keepSlots ? `<div class="team-tile-keep">Keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more</div>` : ''}
+          ${spend.keepSlots ? `<div class="team-tile-keep">Keeps ${fmtMoney(spend.reserve)} (${fmtMoney(PLAYER_BASE_PRICE_CR)} × ${spend.keepSlots})</div>` : ''}
           <div class="purse-bar" aria-hidden="true"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         </div>
       </div>`;
   }).join('');
 }
 
-function nextBidIncrement(amount) {
-  if (amount < 100000) return 10000;
-  if (amount < 500000) return 25000;
-  if (amount < 1000000) return 50000;
-  if (amount < 5000000) return 100000;
-  return 250000;
+const PLAYER_BASE_PRICE_CR = 30;
+const BID_STEP_LOW_CR = 5;
+const BID_STEP_HIGH_CR = 10;
+const BID_HIGH_THRESHOLD_CR = 200;
+
+function bidIncrement(amount) {
+  return Number(amount) >= BID_HIGH_THRESHOLD_CR ? BID_STEP_HIGH_CR : BID_STEP_LOW_CR;
+}
+function nextStandardBid(amount) {
+  return Number(amount || 0) + bidIncrement(amount);
+}
+function nextRaiseAmount(current) {
+  const bidAmount = current.current_bid_amount || current.base_price || PLAYER_BASE_PRICE_CR;
+  return current.current_bid_team_id ? nextStandardBid(bidAmount) : bidAmount;
 }
 
 function ownTeam() {
@@ -563,7 +575,7 @@ function renderManagerDesk() {
   const pct = me.purse_total ? Math.round((me.purse_remaining / me.purse_total) * 100) : 0;
   const current = state.currentAuction;
   const currentAmount = current ? (current.current_bid_amount || current.base_price) : 0;
-  const nextAmount = current ? currentAmount + nextBidIncrement(currentAmount) : 0;
+  const nextAmount = current ? nextRaiseAmount(current) : 0;
   const afterBuy = me.purse_remaining - nextAmount;
   const slotsAfter = slotsLeft - 1;
   const spend = spendBudget(me);
@@ -632,14 +644,14 @@ function renderManagerDesk() {
               ? 'Squad complete — you are out of this lot.'
               : (nextAmount > me.purse_remaining
                 ? 'This raise is over your remaining purse.'
-                : 'This raise is over your max spend — keep the minimum for remaining slots.'))
+                : 'This raise is over your max spend — keep ₹30 Cr for each remaining slot.'))
             : 'Comfortable — you can still cover remaining slots.'}</p>
       </article>
     </div>
     <div class="auction-status-strip manager-status">
-      <div class="status-chip"><strong>${fmtMoney(me.purse_remaining)}</strong><span>Points remaining</span></div>
+      <div class="status-chip"><strong>${fmtMoney(me.purse_remaining)}</strong><span>Purse remaining</span></div>
       <div class="status-chip is-highlight"><strong>${fmtMoney(max)}</strong><span>Max you can spend</span></div>
-      <div class="status-chip"><strong>${spend.keepSlots ? fmtMoney(spend.reserve) : '—'}</strong><span>${spend.keepSlots ? `Kept for ${spend.keepSlots} more` : 'Last slot'}</span></div>
+      <div class="status-chip"><strong>${spend.keepSlots ? fmtMoney(spend.reserve) : '—'}</strong><span>${spend.keepSlots ? `Reserved (₹30 Cr × ${spend.keepSlots})` : 'Last slot'}</span></div>
       <div class="status-chip"><strong>${squad.length}/${me.slots_max}</strong><span>Players taken</span></div>
       <div class="status-chip"><strong>${strength ? strength + '★' : '—'}</strong><span>Squad level</span></div>
       <div class="status-chip"><strong>${gaps.length ? gaps.join(' ') : 'None'}</strong><span>Position gaps</span></div>
@@ -699,7 +711,7 @@ function renderTeamViewList() {
         </header>
         <div class="team-view-purse">
           <div class="team-purse-chart" style="--purse-percent:${percentageRemaining}; --purse-color:${purseColor};" role="img" aria-label="${escapeHtml(team.name)} has ${percentageRemaining}% purse remaining"><span>${percentageRemaining}%</span></div>
-          <div><span>Remaining purse</span><strong>${fmtMoney(team.purse_remaining)}</strong><small>of ${fmtMoney(team.purse_total)} total</small><small class="team-view-max-spend">Max spend ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more` : ''}</small></div>
+          <div><span>Remaining purse</span><strong>${fmtMoney(team.purse_remaining)}</strong><small>of ${fmtMoney(team.purse_total)} total</small><small class="team-view-max-spend">Max spend ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} (₹30 Cr × ${spend.keepSlots})` : ''}</small></div>
         </div>
         <div class="team-view-purse-bar" aria-hidden="true"><span style="width:${percentageRemaining}%; background:${purseColor};"></span></div>
         <div class="team-view-squad">${selectedPlayers}${emptySlotMarkup}</div>
@@ -975,13 +987,7 @@ function statusBadge(status) {
 }
 function fmtMoney(v) {
   if (v === null || v === undefined) return '-';
-  return '₹' + Number(v).toLocaleString('en-IN');
-}
-function remainingBasePrices() {
-  return (state.players || [])
-    .filter(p => p.status === 'waiting' || p.status === 'unsold')
-    .map(p => p.base_price || 0)
-    .sort((a, b) => a - b);
+  return '₹' + Number(v).toLocaleString('en-IN') + ' Cr';
 }
 function slotsRemaining(team) {
   const filled = team.slots_filled != null ? team.slots_filled : (team.squad || []).length;
@@ -991,7 +997,7 @@ function spendBudget(team) {
   const left = slotsRemaining(team);
   if (left <= 0) return { max: 0, reserve: 0, keepSlots: 0 };
   const keepSlots = Math.max(0, left - 1);
-  const reserve = remainingBasePrices().slice(0, keepSlots).reduce((sum, price) => sum + price, 0);
+  const reserve = keepSlots * PLAYER_BASE_PRICE_CR;
   return {
     max: Math.max(0, (team.purse_remaining || 0) - reserve),
     reserve,

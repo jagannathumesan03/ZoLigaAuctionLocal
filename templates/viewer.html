@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Auction — Football Tournament</title>
-<link rel="stylesheet" href="/static/css/style.css?v=stars-4">
-<script src="/static/js/theme.js?v=theme-1"></script>
+<link rel="stylesheet" href="/static/css/style.css?v=rules-6">
+<script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="viewer-page">
 
@@ -21,8 +21,17 @@
     </div>
   </div>
   <div class="topbar-actions">
-    <button class="btn btn-sm btn-quiet theme-toggle" id="themeToggle" type="button">Light theme</button>
-    <button class="btn btn-sm btn-quiet" type="button" onclick="logout()">Logout</button>
+    <button class="btn btn-sm btn-quiet icon-btn" id="fullscreenToggle" type="button" aria-label="Full screen" title="Full screen">
+      <svg class="icon-main" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+      <svg class="icon-alt" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M8 21v-3a2 2 0 0 0-2-2H3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+    </button>
+    <button class="btn btn-sm btn-quiet icon-btn theme-toggle" id="themeToggle" type="button" aria-label="Switch to light theme" title="Switch theme">
+      <svg class="icon-main" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="icon-alt" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
+    </button>
+    <button class="btn btn-sm btn-quiet icon-btn" type="button" onclick="logout()" aria-label="Logout" title="Logout">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+    </button>
   </div>
 </header>
 
@@ -77,8 +86,8 @@
 
 </main>
 
-<script src="/static/js/confetti.js?v=stars-4"></script>
-<script src="/static/js/pack-reveal.js?v=stars-4"></script>
-<script src="/static/js/viewer.js?v=stars-4"></script>
+<script src="/static/js/confetti.js?v=rules-5"></script>
+<script src="/static/js/pack-reveal.js?v=rules-1"></script>
+<script src="/static/js/viewer.js?v=rules-5"></script>
 </body>
 </html>
