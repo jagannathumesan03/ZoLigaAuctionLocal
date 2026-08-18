@@ -22,14 +22,64 @@ let auctionBaselineReady = false;
     if (!res.ok) throw new Error();
     state.auth = await res.json();
     if (state.auth.role === 'team') setupManagerTab();
+    if (isBroadcastViewer()) document.body.classList.add('has-broadcast-camera');
     init();
   } catch (e) {
     window.location.href = '/login';
   }
 })();
 
+function isBroadcastViewer() {
+  return state.auth.role === 'viewer';
+}
+
+function isManagerViewer() {
+  return state.auth.role === 'team';
+}
+
 function logout() {
+  stopSpotlightCamera();
   fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = '/login');
+}
+
+let spotlightCameraStream = null;
+
+function stopSpotlightCamera() {
+  if (!spotlightCameraStream) return;
+  spotlightCameraStream.getTracks().forEach(track => track.stop());
+  spotlightCameraStream = null;
+  const video = document.getElementById('spotlightCameraVideo');
+  const frame = document.getElementById('spotlightCamera');
+  const start = document.getElementById('spotlightCameraStart');
+  if (video) video.srcObject = null;
+  if (frame) frame.classList.remove('is-live');
+  if (start) start.textContent = 'Start camera';
+}
+
+async function startSpotlightCamera() {
+  const start = document.getElementById('spotlightCameraStart');
+  const video = document.getElementById('spotlightCameraVideo');
+  const frame = document.getElementById('spotlightCamera');
+  if (!video || !frame) return;
+  try {
+    if (start) start.textContent = 'Starting…';
+    spotlightCameraStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { aspectRatio: 1.777, width: { ideal: 1280 }, height: { ideal: 720 } },
+    });
+    video.srcObject = spotlightCameraStream;
+    await video.play();
+    frame.classList.add('is-live');
+  } catch (err) {
+    stopSpotlightCamera();
+    if (start) start.textContent = 'Camera unavailable — click to retry';
+  }
+}
+
+function setupSpotlightCamera() {
+  const start = document.getElementById('spotlightCameraStart');
+  if (!start) return;
+  start.addEventListener('click', startSpotlightCamera);
 }
 
 function setupManagerTab() {
@@ -37,20 +87,24 @@ function setupManagerTab() {
   const panel = document.getElementById('tab-manager');
   if (tab) tab.hidden = false;
   if (panel) panel.hidden = false;
+  document.body.classList.add('has-manager-desk');
+  activateTab('manager');
 }
 
 // ---------- Tabs ----------
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => {
-      t.classList.remove('active');
-      t.setAttribute('aria-selected', 'false');
-    });
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    tab.setAttribute('aria-selected', 'true');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+function activateTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => {
+    const on = t.dataset.tab === tabName;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
   });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const panel = document.getElementById('tab-' + tabName);
+  if (panel) panel.classList.add('active');
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => activateTab(tab.dataset.tab));
 });
 
 async function apiFetch(url) {
@@ -69,6 +123,7 @@ async function init() {
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
   setInterval(refreshRelativeTimes, 5000);
   setInterval(tickAuctionTimer, 250);
+  if (isBroadcastViewer()) setupSpotlightCamera();
 }
 
 async function loadPlayers() { state.players = await apiFetch('/api/players'); }
@@ -370,19 +425,7 @@ function resultStateHtml(result) {
 }
 
 // ---------- Hero: current player + current bid ----------
-// Photo + player info on the left; bid history fills the empty right
-// side of the spotlight card (current bid lives in .info only).
-function spotlightBidPanelHtml() {
-  return `
-    <aside class="spotlight-bid-panel bid-activity-card dashboard-card" aria-labelledby="bidHistoryTitle">
-      <div class="dashboard-heading"><h2 id="bidHistoryTitle">Bid history</h2><span class="activity-caption">Live</span></div>
-      <div id="bidHistory" class="bid-history-log"></div>
-    </aside>`;
-}
-
-function fillSpotlightBidPanels() {
-  renderBidHistory();
-}
+// Photo + player info fill the left of the viewer window; camera stays on the right.
 
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
@@ -410,8 +453,9 @@ function renderSpotlight() {
   const call = activeCallState();
   const isNewBid = state.lastSpotlightBid !== null && state.lastSpotlightBid !== bidAmount;
 
+  const showBidHistory = isManagerViewer();
   container.innerHTML = `
-    <div class="spotlight fifa-card has-bid-panel ${cardTierClass(current.card_tier)}">
+    <div class="spotlight fifa-card${showBidHistory ? ' has-bid-panel' : ''} ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
       <div class="spotlight-photo-wrap">
         ${ratingBadgeHtml(current)}
@@ -435,14 +479,26 @@ function renderSpotlight() {
             : `<span class="muted">No bids yet — starting at base price</span>`}
         </div>
       </div>
-      ${spotlightBidPanelHtml()}
+      ${showBidHistory ? spotlightBidPanelHtml() : ''}
     </div>`;
   state.lastSpotlightBid = bidAmount;
-  fillSpotlightBidPanels();
+  if (showBidHistory) renderBidHistory();
   renderAuctionTimerDock();
 }
 
-// ---------- Bid history (newest on top; older bids scroll below) ----------
+function spotlightBidPanelHtml() {
+  return `
+    <aside class="spotlight-bid-panel bid-activity-card dashboard-card" aria-labelledby="bidHistoryTitle">
+      <div class="dashboard-heading"><h2 id="bidHistoryTitle">Bid history</h2><span class="activity-caption">Live</span></div>
+      <div id="bidHistory" class="bid-history-log"></div>
+    </aside>`;
+}
+
+function bidTeamLogo(teamId) {
+  const team = state.teams.find(candidate => candidate.id === teamId);
+  return team && team.logo_url ? team.logo_url : placeholderImg();
+}
+
 function renderBidHistory() {
   const historyContainer = document.getElementById('bidHistory');
   if (!historyContainer) return;
@@ -452,7 +508,6 @@ function renderBidHistory() {
     return;
   }
   const history = current.history || [];
-  // Newest first so the current bid stays at the top of the scrollable log.
   const historyItems = [...history].reverse().map((h, index) => `
     <div class="bid-history-item${index === 0 ? ' is-current' : ''}">
       <span class="bid-history-team">
@@ -861,11 +916,6 @@ function setConnectionStatus(isConnected) {
     element.lastChild.textContent = isConnected ? ' Live updates connected' : ' Reconnecting live updates';
     element.classList.toggle('is-reconnecting', !isConnected);
   });
-}
-
-function bidTeamLogo(teamId) {
-  const team = state.teams.find(candidate => candidate.id === teamId);
-  return team && team.logo_url ? team.logo_url : placeholderImg();
 }
 
 const POS_ORDER = ['GK', 'DEF', 'MID', 'FW'];

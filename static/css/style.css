@@ -738,16 +738,23 @@ h1, h2, h3 { letter-spacing: 0; }
   border-radius: var(--radius);
   box-shadow: 0 0 0 1px rgba(255, 179, 26, 0.07), 0 20px 46px rgba(0, 0, 0, 0.25);
 }
-.spotlight-photo-wrap { position: relative; flex: 0 0 auto; }
+.spotlight-photo-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: #0e141b;
+}
 .spotlight-photo-wrap .spotlight-player-photo {
   width: 196px;
   height: 216px;
   display: block;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 6px;
+  border: 0;
+  border-radius: 0;
   object-fit: contain;
   object-position: center;
-  padding: 8px;
+  padding: 0;
   box-sizing: border-box;
   background: #0e141b;
 }
@@ -1188,9 +1195,89 @@ h1, h2, h3 { letter-spacing: 0; }
 @media (max-width: 760px) {
   .manager-grid, .manager-squad { grid-template-columns: 1fr; }
 }
-.viewer-page .container { max-width: 1180px; padding-top: 12px; }
+.viewer-page .container { max-width: 1400px; padding-top: 12px; }
 .viewer-page .topbar { min-height: 58px; background: rgba(6, 13, 29, 0.95); }
 .viewer-page .auction-broadcast { margin-top: 0; }
+.viewer-page .viewer-window {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  min-height: 0;
+  margin: 0 0 18px;
+  padding: 16px;
+  background: linear-gradient(105deg, #0c1530, #0b1630 52%, #0b1b30);
+  border: 1px solid rgba(78, 103, 177, 0.3);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+.viewer-page .spotlight-camera {
+  position: relative;
+  flex: 1 1 42%;
+  min-width: 240px;
+  max-width: 720px;
+  aspect-ratio: 16 / 9;
+  align-self: center;
+  overflow: hidden;
+  border: 1px solid rgba(126, 93, 255, 0.4);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(8, 14, 32, 0.2), rgba(8, 14, 32, 0.55)),
+    repeating-conic-gradient(from 0deg, #0b1228 0 25%, #0e1733 0 50%);
+  background-size: auto, 24px 24px;
+}
+.viewer-page .spotlight-camera video {
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #050814;
+}
+.viewer-page .spotlight-camera.is-live video { display: block; }
+.viewer-page .spotlight-camera-start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9eb0d4;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.viewer-page .spotlight-camera.is-live .spotlight-camera-start { display: none; }
+.viewer-page .viewer-window > #spotlight {
+  flex: 1 1 58%;
+  min-width: 0;
+  display: flex;
+}
+.viewer-page:not(.has-broadcast-camera) .spotlight-camera { display: none; }
+.viewer-page:not(.has-broadcast-camera) .viewer-window > #spotlight { flex: 1 1 100%; }
+.viewer-page .spotlight {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 4px 4px 0;
+  gap: 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.viewer-page .spotlight-waiting.has-waiting-bg {
+  background-image:
+    linear-gradient(180deg, rgba(7, 14, 32, 0.5), rgba(7, 14, 32, 0.7)),
+    var(--waiting-bg-image);
+  background-size: cover;
+  background-position: center;
+}
 
 /* Fixed dock under Logout — outside topbar and spotlight */
 .auction-timer-dock {
@@ -1211,22 +1298,17 @@ h1, h2, h3 { letter-spacing: 0; }
 @media (max-width: 760px) {
   .auction-timer-dock { top: 64px; right: 12px; }
 }
-.viewer-page .spotlight { min-height: 288px; padding: 20px; gap: 24px; background: linear-gradient(105deg, #0c1530, #0b1630 52%, #0b1b30); border-color: rgba(78, 103, 177, 0.3); box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2); }
-.viewer-page .spotlight-waiting.has-waiting-bg {
-  background-image:
-    linear-gradient(180deg, rgba(7, 14, 32, 0.5), rgba(7, 14, 32, 0.7)),
-    var(--waiting-bg-image);
-  background-size: cover;
-  background-position: center;
-}
-.viewer-page .spotlight-photo-wrap .spotlight-player-photo { width: 184px; height: 238px; border-color: rgba(126, 93, 255, 0.4); border-radius: 8px; }
-.viewer-page .spotlight .info { justify-content: flex-start; padding-top: 10px; }
-.viewer-page .spotlight.has-bid-panel .info { flex: 1 1 0; max-width: none; }
-.viewer-page .spotlight .info h2 { color: #f6f7ff; font-size: clamp(1.55rem, 3vw, 2.1rem); }
-.viewer-page .leading-team-row { font-size: 2rem; }
-.viewer-page .leading-team-name { font-size: 2rem; }
+.viewer-page .spotlight { min-height: 0; padding: 14px 10px 14px 4px; gap: 22px; background: transparent; border: none; box-shadow: none; align-items: flex-start; }
+.viewer-page .spotlight-photo-wrap { border-color: rgba(126, 93, 255, 0.4); border-radius: 8px; }
+.viewer-page .spotlight-photo-wrap .spotlight-player-photo { width: 220px; height: 286px; border: 0; border-radius: 0; }
+.viewer-page .spotlight .info { justify-content: flex-start; padding-top: 12px; }
+.viewer-page .spotlight .info .auction-state-label { margin: 0 0 8px; }
+.viewer-page .spotlight .info h2 { color: #f6f7ff; font-size: clamp(1.7rem, 3vw, 2.35rem); }
+.viewer-page .leading-team-row { font-size: 1.45rem; }
+.viewer-page .leading-team-name { font-size: 1.45rem; }
 .viewer-page .badge-auction { background: rgba(255, 179, 26, 0.12); color: #ffcb46; }
-.viewer-page .bid-amount-display { color: #1de58a; }
+.viewer-page .bid-amount-display { color: #1de58a; font-size: clamp(2rem, 4vw, 3rem); }
+.viewer-page .spotlight .star-rating-lg { font-size: 2.15rem; }
 
 /* Bid activity lives in the empty right half of the live spotlight card. */
 .spotlight-bid-panel {
@@ -1272,9 +1354,15 @@ h1, h2, h3 { letter-spacing: 0; }
 
 .viewer-page .bid-activity-card { margin: 0; }
 .viewer-page .bid-history-log { max-height: 150px; margin-top: 0; }
-.viewer-page .spotlight-bid-panel .bid-history-log { max-height: 300px; }
-.viewer-page .spotlight-bid-panel.bid-activity-card { box-shadow: none; }
 .viewer-page .bid-history-item { min-height: 35px; padding: 6px 8px; color: #dce6fc; font-size: 0.72rem; }
+.viewer-page.has-manager-desk .spotlight-photo-wrap .spotlight-player-photo { width: 184px; height: 238px; }
+.viewer-page.has-manager-desk .spotlight-bid-panel {
+  flex: 0 1 280px;
+  width: min(280px, 100%);
+  min-width: 220px;
+  max-width: 320px;
+}
+.viewer-page.has-manager-desk .spotlight-bid-panel .bid-history-log { max-height: 280px; }
 .bid-history-team { display: inline-flex; align-items: center; min-width: 0; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bid-history-team img { width: 21px; height: 21px; flex: 0 0 21px; border-radius: 50%; background: #0a1428; object-fit: cover; }
 .spotlight .bid-history-team img {
@@ -1339,6 +1427,16 @@ h1, h2, h3 { letter-spacing: 0; }
 .team-view-empty-slot { border: 1px dashed rgba(111, 142, 199, 0.45); color: #8195b7; font-size: 0.7rem; }
 
 .team-view-player-photo { width: 28px; height: 28px; flex: 0 0 28px; margin-right: 8px; border: 1px solid rgba(116, 153, 229, 0.45); border-radius: 50%; background: #0d1d3c; object-fit: cover; object-position: top center; }
+
+@media (max-width: 1100px) {
+  .viewer-page .viewer-window { flex-direction: column; }
+  .viewer-page .spotlight-camera {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+  }
+  .viewer-page .viewer-window > #spotlight { flex: 1 1 auto; }
+}
 
 @media (max-width: 980px) {
   .spotlight-bid-panel {
@@ -1606,11 +1704,24 @@ h1, h2, h3 { letter-spacing: 0; }
 
 [data-theme="light"] .viewer-page { background: radial-gradient(circle at 18% 0, rgba(129, 181, 222, 0.32), transparent 33%), linear-gradient(180deg, #edf5fa, #f6f9fb 58%); }
 [data-theme="light"] .viewer-page .topbar { background: rgba(255, 255, 255, 0.94); }
-[data-theme="light"] .viewer-page .spotlight {
+[data-theme="light"] .viewer-page .viewer-window {
   background: linear-gradient(105deg, #eff8ff, #f9fcff 52%, #f7fbfd);
   border-color: rgba(8, 127, 198, 0.3);
   box-shadow: 0 14px 30px rgba(31, 74, 108, 0.12);
 }
+[data-theme="light"] .viewer-page .spotlight {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+[data-theme="light"] .viewer-page .spotlight-camera {
+  border-color: rgba(8, 127, 198, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.35), rgba(232, 242, 250, 0.8)),
+    repeating-conic-gradient(from 0deg, #e7eef4 0 25%, #dce7ef 0 50%);
+  background-size: auto, 24px 24px;
+}
+[data-theme="light"] .viewer-page .spotlight-camera-start { color: #536b80; }
 [data-theme="light"] .auction-timer {
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(31, 74, 108, 0.18);

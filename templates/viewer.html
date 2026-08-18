@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Auction — Football Tournament</title>
-<link rel="stylesheet" href="/static/css/style.css?v=rules-6">
+<link rel="stylesheet" href="/static/css/style.css?v=rules-12">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="viewer-page">
@@ -41,7 +41,13 @@
 
   <section class="auction-broadcast" aria-labelledby="liveAuctionTitle">
     <h1 class="sr-only" id="liveAuctionTitle">Live auction dashboard</h1>
-    <div id="spotlight"></div>
+    <div class="viewer-window">
+      <div id="spotlight"></div>
+      <div class="spotlight-camera" id="spotlightCamera">
+        <video id="spotlightCameraVideo" autoplay muted playsinline></video>
+        <button class="spotlight-camera-start" id="spotlightCameraStart" type="button">Start camera</button>
+      </div>
+    </div>
   </section>
 
   <section class="auction-status-strip" id="auctionOverview" aria-label="Auction status"></section>
@@ -88,6 +94,6 @@
 
 <script src="/static/js/confetti.js?v=rules-5"></script>
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
-<script src="/static/js/viewer.js?v=rules-5"></script>
+<script src="/static/js/viewer.js?v=rules-11"></script>
 </body>
 </html>
