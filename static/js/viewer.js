@@ -22,14 +22,64 @@ let auctionBaselineReady = false;
     if (!res.ok) throw new Error();
     state.auth = await res.json();
     if (state.auth.role === 'team') setupManagerTab();
+    if (isBroadcastViewer()) document.body.classList.add('has-broadcast-camera');
     init();
   } catch (e) {
     window.location.href = '/login';
   }
 })();
 
+function isBroadcastViewer() {
+  return state.auth.role === 'viewer';
+}
+
+function isManagerViewer() {
+  return state.auth.role === 'team';
+}
+
 function logout() {
+  stopSpotlightCamera();
   fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = '/login');
+}
+
+let spotlightCameraStream = null;
+
+function stopSpotlightCamera() {
+  if (!spotlightCameraStream) return;
+  spotlightCameraStream.getTracks().forEach(track => track.stop());
+  spotlightCameraStream = null;
+  const video = document.getElementById('spotlightCameraVideo');
+  const frame = document.getElementById('spotlightCamera');
+  const start = document.getElementById('spotlightCameraStart');
+  if (video) video.srcObject = null;
+  if (frame) frame.classList.remove('is-live');
+  if (start) start.textContent = 'Start camera';
+}
+
+async function startSpotlightCamera() {
+  const start = document.getElementById('spotlightCameraStart');
+  const video = document.getElementById('spotlightCameraVideo');
+  const frame = document.getElementById('spotlightCamera');
+  if (!video || !frame) return;
+  try {
+    if (start) start.textContent = 'Starting…';
+    spotlightCameraStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { aspectRatio: 1.777, width: { ideal: 1280 }, height: { ideal: 720 } },
+    });
+    video.srcObject = spotlightCameraStream;
+    await video.play();
+    frame.classList.add('is-live');
+  } catch (err) {
+    stopSpotlightCamera();
+    if (start) start.textContent = 'Camera unavailable — click to retry';
+  }
+}
+
+function setupSpotlightCamera() {
+  const start = document.getElementById('spotlightCameraStart');
+  if (!start) return;
+  start.addEventListener('click', startSpotlightCamera);
 }
 
 function setupManagerTab() {
@@ -37,20 +87,24 @@ function setupManagerTab() {
   const panel = document.getElementById('tab-manager');
   if (tab) tab.hidden = false;
   if (panel) panel.hidden = false;
+  document.body.classList.add('has-manager-desk');
+  activateTab('manager');
 }
 
 // ---------- Tabs ----------
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => {
-      t.classList.remove('active');
-      t.setAttribute('aria-selected', 'false');
-    });
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    tab.setAttribute('aria-selected', 'true');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+function activateTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => {
+    const on = t.dataset.tab === tabName;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
   });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const panel = document.getElementById('tab-' + tabName);
+  if (panel) panel.classList.add('active');
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => activateTab(tab.dataset.tab));
 });
 
 async function apiFetch(url) {
@@ -69,6 +123,7 @@ async function init() {
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
   setInterval(refreshRelativeTimes, 5000);
   setInterval(tickAuctionTimer, 250);
+  if (isBroadcastViewer()) setupSpotlightCamera();
 }
 
 async function loadPlayers() { state.players = await apiFetch('/api/players'); }
@@ -346,9 +401,13 @@ function resultStateHtml(result) {
     return `
       <div class="spotlight result-state is-sold fifa-card ${cardTierClass(p.card_tier)}">
         <span class="result-tag is-sold">Sold</span>
-        <img class="spotlight-player-photo" src="${p.photo_url || placeholderImg()}" alt="${escapeHtml(p.name || 'Player')}">
+        <div class="spotlight-photo-wrap">
+          ${ratingBadgeHtml(p)}
+          <img class="spotlight-player-photo" src="${p.photo_url || placeholderImg()}" alt="${escapeHtml(p.name || 'Player')}">
+        </div>
         <div class="info">
           <h2>${escapeHtml(p.name || 'Player')}</h2>
+          ${starsHtml(p, 'star-rating-lg')}
           <div class="result-price">${fmtMoney(p.sold_price)}</div>
           <div class="result-team">to <b>${escapeHtml(p.team_name || 'Unknown team')}</b></div>
         </div>
@@ -366,19 +425,7 @@ function resultStateHtml(result) {
 }
 
 // ---------- Hero: current player + current bid ----------
-// Photo + player info on the left; bid history fills the empty right
-// side of the spotlight card (current bid lives in .info only).
-function spotlightBidPanelHtml() {
-  return `
-    <aside class="spotlight-bid-panel bid-activity-card dashboard-card" aria-labelledby="bidHistoryTitle">
-      <div class="dashboard-heading"><h2 id="bidHistoryTitle">Bid history</h2><span class="activity-caption">Live</span></div>
-      <div id="bidHistory" class="bid-history-log"></div>
-    </aside>`;
-}
-
-function fillSpotlightBidPanels() {
-  renderBidHistory();
-}
+// Photo + player info fill the left of the viewer window; camera stays on the right.
 
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
@@ -406,15 +453,19 @@ function renderSpotlight() {
   const call = activeCallState();
   const isNewBid = state.lastSpotlightBid !== null && state.lastSpotlightBid !== bidAmount;
 
+  const showBidHistory = isManagerViewer();
   container.innerHTML = `
-    <div class="spotlight fifa-card has-bid-panel ${cardTierClass(current.card_tier)}">
+    <div class="spotlight fifa-card${showBidHistory ? ' has-bid-panel' : ''} ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
-      ${ovrBadgeHtml(current)}
-      <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      <div class="spotlight-photo-wrap">
+        ${ratingBadgeHtml(current)}
+        <img class="spotlight-player-photo" src="${current.photo_url || placeholderImg()}" alt="${escapeHtml(current.name)}">
+      </div>
       <div class="info">
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
+        ${starsHtml(current, 'star-rating-lg')}
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
           <span class="eyebrow">Current bid</span>
@@ -427,16 +478,27 @@ function renderSpotlight() {
                <span class="leading-chip">Leading</span>`
             : `<span class="muted">No bids yet — starting at base price</span>`}
         </div>
-        ${statBarsHtml(current)}
       </div>
-      ${spotlightBidPanelHtml()}
+      ${showBidHistory ? spotlightBidPanelHtml() : ''}
     </div>`;
   state.lastSpotlightBid = bidAmount;
-  fillSpotlightBidPanels();
+  if (showBidHistory) renderBidHistory();
   renderAuctionTimerDock();
 }
 
-// ---------- Bid history (newest on top; older bids scroll below) ----------
+function spotlightBidPanelHtml() {
+  return `
+    <aside class="spotlight-bid-panel bid-activity-card dashboard-card" aria-labelledby="bidHistoryTitle">
+      <div class="dashboard-heading"><h2 id="bidHistoryTitle">Bid history</h2><span class="activity-caption">Live</span></div>
+      <div id="bidHistory" class="bid-history-log"></div>
+    </aside>`;
+}
+
+function bidTeamLogo(teamId) {
+  const team = state.teams.find(candidate => candidate.id === teamId);
+  return team && team.logo_url ? team.logo_url : placeholderImg();
+}
+
 function renderBidHistory() {
   const historyContainer = document.getElementById('bidHistory');
   if (!historyContainer) return;
@@ -446,7 +508,6 @@ function renderBidHistory() {
     return;
   }
   const history = current.history || [];
-  // Newest first so the current bid stays at the top of the scrollable log.
   const historyItems = [...history].reverse().map((h, index) => `
     <div class="bid-history-item${index === 0 ? ' is-current' : ''}">
       <span class="bid-history-team">
@@ -523,19 +584,27 @@ function renderTeamsList() {
             <span class="team-tile-slots">${(t.slots_filled != null ? t.slots_filled : t.squad.length)}/${t.slots_max}</span>
           </div>
           <div class="team-tile-max">Max spend ${fmtMoney(spend.max)}</div>
-          ${spend.keepSlots ? `<div class="team-tile-keep">Keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more</div>` : ''}
+          ${spend.keepSlots ? `<div class="team-tile-keep">Keeps ${fmtMoney(spend.reserve)} (${fmtMoney(PLAYER_BASE_PRICE_CR)} × ${spend.keepSlots})</div>` : ''}
           <div class="purse-bar" aria-hidden="true"><div class="purse-bar-fill" style="width:${pct}%; background:${purseColorFor(pct)}"></div></div>
         </div>
       </div>`;
   }).join('');
 }
 
-function nextBidIncrement(amount) {
-  if (amount < 100000) return 10000;
-  if (amount < 500000) return 25000;
-  if (amount < 1000000) return 50000;
-  if (amount < 5000000) return 100000;
-  return 250000;
+const PLAYER_BASE_PRICE_CR = 30;
+const BID_STEP_LOW_CR = 5;
+const BID_STEP_HIGH_CR = 10;
+const BID_HIGH_THRESHOLD_CR = 200;
+
+function bidIncrement(amount) {
+  return Number(amount) >= BID_HIGH_THRESHOLD_CR ? BID_STEP_HIGH_CR : BID_STEP_LOW_CR;
+}
+function nextStandardBid(amount) {
+  return Number(amount || 0) + bidIncrement(amount);
+}
+function nextRaiseAmount(current) {
+  const bidAmount = current.current_bid_amount || current.base_price || PLAYER_BASE_PRICE_CR;
+  return current.current_bid_team_id ? nextStandardBid(bidAmount) : bidAmount;
 }
 
 function ownTeam() {
@@ -561,7 +630,7 @@ function renderManagerDesk() {
   const pct = me.purse_total ? Math.round((me.purse_remaining / me.purse_total) * 100) : 0;
   const current = state.currentAuction;
   const currentAmount = current ? (current.current_bid_amount || current.base_price) : 0;
-  const nextAmount = current ? currentAmount + nextBidIncrement(currentAmount) : 0;
+  const nextAmount = current ? nextRaiseAmount(current) : 0;
   const afterBuy = me.purse_remaining - nextAmount;
   const slotsAfter = slotsLeft - 1;
   const spend = spendBudget(me);
@@ -575,25 +644,22 @@ function renderManagerDesk() {
     ? Math.round(squad.reduce((sum, p) => sum + (p.sold_price || 0), 0) / squad.length)
     : 0;
   const strength = squad.length
-    ? Math.round(squad.reduce((sum, p) => sum + (p.overall || 0), 0) / squad.length)
+    ? (squad.reduce((sum, p) => sum + starValue(p), 0) / squad.length).toFixed(1)
     : 0;
   const kit = teamKitColor(me);
 
   const signings = squad.length
     ? `<div class="manager-signings-wrap"><table class="manager-signings-table">
-        <thead><tr><th></th><th>Player</th><th>Pos</th><th>Skills</th><th>Rtg</th><th class="paid">Paid</th></tr></thead>
+        <thead><tr><th></th><th>Player</th><th>Pos</th><th>Notes</th><th>Level</th><th class="paid">Paid</th></tr></thead>
         <tbody>${squad.map(p => {
           const pos = roleAbbreviation(p.role);
-          const skills = [p.stats, ['PAC', p.pace, 'SHO', p.shooting, 'PAS', p.passing, 'DRI', p.dribbling, 'DEF', p.defending, 'PHY', p.physical]
-            .reduce((out, _, i, arr) => (i % 2 === 0 ? out.concat(`${arr[i]} ${arr[i + 1] ?? '-'}`) : out), []).join(' · ')]
-            .filter(Boolean).join(' · ');
           return `
             <tr>
               <td><img src="${p.photo_url || placeholderImg()}" alt="" style="border-color:${kit}"></td>
               <td>${escapeHtml(p.name)}</td>
               <td><span class="manager-pos-chip" style="background:${POS_COLOR[pos] || '#6b7280'}">${escapeHtml(pos)}</span></td>
-              <td class="muted">${escapeHtml(skills || '—')}</td>
-              <td class="num">${p.overall != null ? p.overall : '—'}</td>
+              <td class="muted">${escapeHtml(p.stats || '—')}</td>
+              <td class="num">${starsHtml(p, 'star-rating-sm')}</td>
               <td class="paid">${fmtMoney(p.sold_price)}</td>
             </tr>`;
         }).join('')}</tbody>
@@ -613,7 +679,7 @@ function renderManagerDesk() {
             <img src="${current.photo_url || placeholderImg()}" alt="">
             <div>
               <strong>${escapeHtml(current.name)}</strong>
-              <span>${escapeHtml(current.role || 'Player')}${current.overall != null ? ` · ${current.overall} OVR` : ''}</span>
+              <span>${escapeHtml(current.role || 'Player')} · ${starsHtml(current, 'star-rating-inline')}</span>
               <div class="muted">Live bid ${fmtMoney(currentAmount)}</div>
               ${current.current_bid_team_name ? `<div class="muted">Led by ${escapeHtml(current.current_bid_team_name)}</div>` : ''}
               ${fillsGap ? `<span class="leading-chip">Fills your ${currentPos} gap</span>` : ''}
@@ -633,16 +699,16 @@ function renderManagerDesk() {
               ? 'Squad complete — you are out of this lot.'
               : (nextAmount > me.purse_remaining
                 ? 'This raise is over your remaining purse.'
-                : 'This raise is over your max spend — keep the minimum for remaining slots.'))
+                : 'This raise is over your max spend — keep ₹30 Cr for each remaining slot.'))
             : 'Comfortable — you can still cover remaining slots.'}</p>
       </article>
     </div>
     <div class="auction-status-strip manager-status">
-      <div class="status-chip"><strong>${fmtMoney(me.purse_remaining)}</strong><span>Points remaining</span></div>
+      <div class="status-chip"><strong>${fmtMoney(me.purse_remaining)}</strong><span>Purse remaining</span></div>
       <div class="status-chip is-highlight"><strong>${fmtMoney(max)}</strong><span>Max you can spend</span></div>
-      <div class="status-chip"><strong>${spend.keepSlots ? fmtMoney(spend.reserve) : '—'}</strong><span>${spend.keepSlots ? `Kept for ${spend.keepSlots} more` : 'Last slot'}</span></div>
+      <div class="status-chip"><strong>${spend.keepSlots ? fmtMoney(spend.reserve) : '—'}</strong><span>${spend.keepSlots ? `Reserved (₹30 Cr × ${spend.keepSlots})` : 'Last slot'}</span></div>
       <div class="status-chip"><strong>${squad.length}/${me.slots_max}</strong><span>Players taken</span></div>
-      <div class="status-chip"><strong>${strength || '—'}</strong><span>Squad rating</span></div>
+      <div class="status-chip"><strong>${strength ? strength + '★' : '—'}</strong><span>Squad level</span></div>
       <div class="status-chip"><strong>${gaps.length ? gaps.join(' ') : 'None'}</strong><span>Position gaps</span></div>
     </div>
     <div class="manager-squad">
@@ -682,7 +748,7 @@ function renderTeamViewList() {
       <div class="team-view-player">
         <img class="team-view-player-photo" src="${player.photo_url || placeholderImg()}" alt="${escapeHtml(player.name)}">
         <b>${escapeHtml(player.name)}</b>
-        ${player.overall !== undefined ? `<span class="ovr-chip ${cardTierClass(player.card_tier)}">${player.overall}</span>` : ''}
+        ${starsHtml(player, 'star-rating-sm')}
         <span class="team-view-player-position">${roleAbbreviation(player.role)}</span>
         <strong>${fmtMoney(player.sold_price)}</strong>
       </div>`).join('');
@@ -700,7 +766,7 @@ function renderTeamViewList() {
         </header>
         <div class="team-view-purse">
           <div class="team-purse-chart" style="--purse-percent:${percentageRemaining}; --purse-color:${purseColor};" role="img" aria-label="${escapeHtml(team.name)} has ${percentageRemaining}% purse remaining"><span>${percentageRemaining}%</span></div>
-          <div><span>Remaining purse</span><strong>${fmtMoney(team.purse_remaining)}</strong><small>of ${fmtMoney(team.purse_total)} total</small><small class="team-view-max-spend">Max spend ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} for ${spend.keepSlots} more` : ''}</small></div>
+          <div><span>Remaining purse</span><strong>${fmtMoney(team.purse_remaining)}</strong><small>of ${fmtMoney(team.purse_total)} total</small><small class="team-view-max-spend">Max spend ${fmtMoney(spend.max)}${spend.keepSlots ? ` · keeps ${fmtMoney(spend.reserve)} (₹30 Cr × ${spend.keepSlots})` : ''}</small></div>
         </div>
         <div class="team-view-purse-bar" aria-hidden="true"><span style="width:${percentageRemaining}%; background:${purseColor};"></span></div>
         <div class="team-view-squad">${selectedPlayers}${emptySlotMarkup}</div>
@@ -719,14 +785,14 @@ function renderPlayersList() {
   if (!list.length) { container.innerHTML = `<div class="empty">No players found.</div>`; return; }
   container.innerHTML = list.map(p => `
     <div class="player-card fifa-card ${cardTierClass(p.card_tier)}">
-      ${ovrBadgeHtml(p)}
+      ${ratingBadgeHtml(p)}
       <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
       <div class="player-name">${escapeHtml(p.name)}</div>
       <div class="player-meta">${escapeHtml(p.role || '')}</div>
+      ${starsHtml(p)}
       <div class="player-price">${fmtMoney(p.base_price)}${p.sold_price ? ' &rarr; ' + fmtMoney(p.sold_price) : ''}</div>
       ${statusBadge(p.status)}
       ${p.team_name ? `<div class="player-meta">Team: ${escapeHtml(p.team_name)}</div>` : ''}
-      ${statGridHtml(p)}
     </div>
   `).join('');
 }
@@ -852,11 +918,6 @@ function setConnectionStatus(isConnected) {
   });
 }
 
-function bidTeamLogo(teamId) {
-  const team = state.teams.find(candidate => candidate.id === teamId);
-  return team && team.logo_url ? team.logo_url : placeholderImg();
-}
-
 const POS_ORDER = ['GK', 'DEF', 'MID', 'FW'];
 const POS_COLOR = { GK: '#C08A1E', DEF: '#3C82B8', MID: '#12906A', FW: '#D4504A' };
 const TEAM_KIT = ['#D4504A', '#3C82B8', '#12906A', '#C08A1E', '#7D5AA6', '#1F8D96'];
@@ -976,13 +1037,7 @@ function statusBadge(status) {
 }
 function fmtMoney(v) {
   if (v === null || v === undefined) return '-';
-  return '₹' + Number(v).toLocaleString('en-IN');
-}
-function remainingBasePrices() {
-  return (state.players || [])
-    .filter(p => p.status === 'waiting' || p.status === 'unsold')
-    .map(p => p.base_price || 0)
-    .sort((a, b) => a - b);
+  return '₹' + Number(v).toLocaleString('en-IN') + ' Cr';
 }
 function slotsRemaining(team) {
   const filled = team.slots_filled != null ? team.slots_filled : (team.squad || []).length;
@@ -992,7 +1047,7 @@ function spendBudget(team) {
   const left = slotsRemaining(team);
   if (left <= 0) return { max: 0, reserve: 0, keepSlots: 0 };
   const keepSlots = Math.max(0, left - 1);
-  const reserve = remainingBasePrices().slice(0, keepSlots).reduce((sum, price) => sum + price, 0);
+  const reserve = keepSlots * PLAYER_BASE_PRICE_CR;
   return {
     max: Math.max(0, (team.purse_remaining || 0) - reserve),
     reserve,
@@ -1025,35 +1080,35 @@ function relativeTime(ts) {
   return `${diffHr}h ago`;
 }
 
-// ---------- FIFA-style card helpers ----------
-// player.overall / player.card_tier are computed server-side (see
-// backend/database.py's enrich_player); these just turn them into markup
-// shared by the spotlight, team squad view, and player pool cards.
+// ---------- Player card helpers ----------
+// Organizers set player.stars (2.0–5.0, half-step). card_tier is derived server-side.
 function cardTierClass(tier) {
   return 'card-' + (tier || 'bronze');
 }
-function ovrBadgeHtml(p) {
-  if (p.overall === undefined || p.overall === null) return '';
-  return `<div class="ovr-badge ${cardTierClass(p.card_tier)}"><span class="ovr-value">${p.overall}</span><span class="ovr-label">OVR</span></div>`;
+function starValue(p) {
+  const n = parseFloat(p && p.stars);
+  if (!Number.isFinite(n)) return 3;
+  return Math.max(2, Math.min(5, Math.round(n * 2) / 2));
 }
-function statGridHtml(p) {
-  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
-  return `<div class="stat-grid">${stats.map(([label, val]) =>
-    `<div class="stat-item"><span class="stat-label">${label}</span><span class="stat-value">${val ?? '-'}</span></div>`
-  ).join('')}</div>`;
+function ratingLabel(p) {
+  return starValue(p).toFixed(1).replace(/\.0$/, '');
 }
-// Compact bar-meter version used in the hero spotlight, where the six
-// sub-stats need to be scannable at a glance without competing visually
-// with the player's name or the current bid.
-function statBarsHtml(p) {
-  const stats = [['PAC', p.pace], ['SHO', p.shooting], ['PAS', p.passing], ['DRI', p.dribbling], ['DEF', p.defending], ['PHY', p.physical]];
-  return `<div class="stat-bars">${stats.map(([label, val]) => {
-    const pct = Math.max(0, Math.min(100, val ?? 0));
-    return `
-      <div class="stat-bar-row">
-        <span class="stat-bar-label">${label}</span>
-        <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
-        <span class="stat-bar-value">${val ?? '-'}</span>
-      </div>`;
-  }).join('')}</div>`;
+function starsHtml(p, extraClass) {
+  const value = starValue(p);
+  const cls = extraClass ? ` ${extraClass}` : '';
+  const stars = [];
+  for (let i = 1; i <= 5; i += 1) {
+    if (value >= i) {
+      stars.push('<span class="star-glyph is-full">★</span>');
+    } else if (value >= i - 0.5) {
+      stars.push('<span class="star-glyph is-half"><span class="star-right">★</span><span class="star-left">★</span></span>');
+    } else {
+      stars.push('<span class="star-glyph is-empty">★</span>');
+    }
+  }
+  return `<span class="star-rating${cls}" aria-label="${value} of 5 stars">${stars.join('')}</span>`;
+}
+function ratingBadgeHtml(p, extraClass) {
+  const cls = extraClass ? ` ${extraClass}` : '';
+  return `<div class="rating-badge ${cardTierClass(p.card_tier)}${cls}" aria-label="Player value ${starValue(p)} of 5">${ratingLabel(p)}</div>`;
 }

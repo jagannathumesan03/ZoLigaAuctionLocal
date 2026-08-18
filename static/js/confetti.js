@@ -80,7 +80,7 @@
 
   function fmtMoney(v) {
     if (v === null || v === undefined) return '-';
-    return '₹' + Number(v).toLocaleString('en-IN');
+    return '₹' + Number(v).toLocaleString('en-IN') + ' Cr';
   }
 
   function escapeHtml(str) {
@@ -93,6 +93,35 @@
     );
   }
 
+
+  function starValue(player) {
+    const n = parseFloat(player && player.stars);
+    if (!Number.isFinite(n)) return 3;
+    return Math.max(2, Math.min(5, Math.round(n * 2) / 2));
+  }
+
+  function ratingLabel(player) {
+    return starValue(player).toFixed(1).replace(/\.0$/, '');
+  }
+
+  function starsHtml(player, extraClass = '') {
+    const value = starValue(player);
+    const stars = [];
+    for (let i = 1; i <= 5; i += 1) {
+      if (value >= i) {
+        stars.push('<span class="star-glyph is-full">★</span>');
+      } else if (value >= i - 0.5) {
+        stars.push('<span class="star-glyph is-half"><span class="star-right">★</span><span class="star-left">★</span></span>');
+      } else {
+        stars.push('<span class="star-glyph is-empty">★</span>');
+      }
+    }
+    return `<div class="star-rating${extraClass}" aria-label="${value} of 5 stars">${stars.join('')}</div>`;
+  }
+
+  function ratingBadgeHtml(player, extraClass = '') {
+    return `<div class="rating-badge card-${player.card_tier || 'bronze'}${extraClass}" aria-label="Player value ${starValue(player)} of 5">${ratingLabel(player)}</div>`;
+  }
   let dismissTimer = null;
 
   window.celebrateSale = function celebrateSale(player) {
@@ -114,11 +143,10 @@
     overlay.innerHTML = `
       <div class="sale-celebration-card fifa-card ${tierClass}">
         <span class="sale-celebration-tag">Sold!</span>
-        ${player.overall !== undefined && player.overall !== null
-          ? `<div class="ovr-badge ${tierClass}"><span class="ovr-value">${player.overall}</span><span class="ovr-label">OVR</span></div>`
-          : ''}
+        ${ratingBadgeHtml(player)}
         <img class="sale-celebration-photo" src="${player.photo_url || placeholderImg()}" alt="${escapeHtml(player.name || 'Player')}" onerror="this.src='${placeholderImg()}'">
         <h2>${escapeHtml(player.name || 'Player')}</h2>
+        ${starsHtml(player)}
         <div class="sale-celebration-team">${player.team_name ? `to <b>${escapeHtml(player.team_name)}</b>` : ''}</div>
         <div class="sale-celebration-price">${fmtMoney(player.sold_price)}</div>
       </div>`;
