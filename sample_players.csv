@@ -1,8 +1,8 @@
-name,role,base_price,stats,stars
-Arjun Mehta,Forward,30,"Top scorer last season, 22 goals",5
-Rohan Kapoor,Midfielder,30,"Excellent passing accuracy, 90%",4
-Sameer Khan,Defender,30,"Strong tackler, 3 seasons captain",3.5
-Vikram Singh,Goalkeeper,30,"12 clean sheets last season",3
+name,role,base_price,stats,stars,photo_path
+Arjun Mehta,Forward,30,"Top scorer last season, 22 goals",5,/Users/jagan-15934/Downloads/anvar.png
+Rohan Kapoor,Midfielder,30,"Excellent passing accuracy, 90%",4,/Users/jagan-15934/Downloads/anvar.png
+Sameer Khan,Defender,30,"Strong tackler, 3 seasons captain",3.5,/Users/jagan-15934/Downloads/anvar.png
+Vikram Singh,Goalkeeper,30,"12 clean sheets last season",3,/Users/jagan-15934/Downloads/anvar.png
 Aditya Rao,Forward,30,"Fast winger, good dribbling",4
 Karan Verma,Midfielder,30,"Box-to-box, high stamina",4.5
 Nikhil Sharma,Defender,30,"Reliable center-back",3
@@ -13,3 +13,4 @@ Fasil,Forward,30,"Live auction forward",4
 Jagan,Forward,30,"High-value forward",5
 Jibin Jose,Defender,30,"Solid centre-back",4
 Najaf,Goalkeeper,30,"Shot-stopper",4
+Anvar,Forward,30,"Sample import with local photo path",4,/Users/jagan-15934/Downloads/anvar.png

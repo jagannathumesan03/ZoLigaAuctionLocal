@@ -1092,7 +1092,13 @@ async function uploadCsv(event) {
   fd.append('file', file);
   try {
     const result = await apiFetch('/api/players/bulk-csv', { method: 'POST', body: fd });
-    toast(`Imported ${result.created} players` + (result.errors.length ? ` (${result.errors.length} errors)` : ''));
+    let msg = `Imported ${result.created} players`;
+    if (result.photos_imported) msg += `, ${result.photos_imported} photo(s)`;
+    if (result.errors.length) {
+      msg += ` (${result.errors.length} warning(s): ${result.errors.slice(0, 2).join('; ')}${result.errors.length > 2 ? '…' : ''})`;
+    }
+    toast(msg, result.errors.length > 0 && result.created === 0);
+    if (result.errors.length) console.warn('CSV import warnings:', result.errors);
     await loadPlayers();
     renderAll();
   } catch (e) { toast(e.message, true); }

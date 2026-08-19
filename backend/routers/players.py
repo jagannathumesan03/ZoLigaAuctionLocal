@@ -23,8 +23,12 @@ from backend.auth import require_admin, require_any
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "static", "uploads", "players")
-UPLOAD_DIR = os.path.abspath(UPLOAD_DIR)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+UPLOAD_DIR = os.path.join(PROJECT_ROOT, "static", "uploads", "players")
+IMPORT_PHOTOS_DIR = os.path.abspath(
+    os.environ.get("IMPORT_PHOTOS_DIR", os.path.join(PROJECT_ROOT, "import", "photos"))
+)
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 def save_photo(photo: UploadFile) -> str:
@@ -35,6 +39,56 @@ def save_photo(photo: UploadFile) -> str:
     with open(dest, "wb") as f:
         shutil.copyfileobj(photo.file, f)
     return f"/static/uploads/players/{fname}"
+
+
+def _photo_path_candidates(raw_path: str) -> list[str]:
+    raw_path = raw_path.strip().strip('"').strip("'")
+    if not raw_path or raw_path.startswith(("http://", "https://", "/static/")):
+        return []
+    candidates = []
+    if os.path.isabs(raw_path):
+        candidates.append(os.path.abspath(raw_path))
+    else:
+        candidates.append(os.path.abspath(os.path.join(IMPORT_PHOTOS_DIR, raw_path)))
+        candidates.append(os.path.abspath(os.path.join(PROJECT_ROOT, raw_path)))
+    # Preserve order while dropping duplicates.
+    seen = set()
+    unique = []
+    for path in candidates:
+        if path not in seen:
+            seen.add(path)
+            unique.append(path)
+    return unique
+
+
+def resolve_photo_source(raw_path: str) -> Optional[str]:
+    for path in _photo_path_candidates(raw_path):
+        if not os.path.isfile(path):
+            continue
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ALLOWED_IMAGE_EXTS:
+            return path
+    return None
+
+
+def save_photo_from_path(raw_path: str) -> str:
+    source = resolve_photo_source(raw_path)
+    if not source:
+        raise ValueError(f"Photo not found or unsupported type: {raw_path}")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    ext = os.path.splitext(source)[1].lower() or ".jpg"
+    fname = f"{uuid.uuid4().hex}{ext}"
+    dest = os.path.join(UPLOAD_DIR, fname)
+    shutil.copy2(source, dest)
+    return f"/static/uploads/players/{fname}"
+
+
+def csv_photo_path(row: dict) -> str:
+    for key in ("photo_path", "photo", "photo_file", "photo_location"):
+        value = (row.get(key) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 @router.get("")
@@ -146,6 +200,7 @@ async def bulk_upload_csv(request: Request, file: UploadFile = File(...), _=Depe
     text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
     created = 0
+    photos_imported = 0
     errors = []
     with db_cursor() as cur:
         for i, row in enumerate(reader, start=2):
@@ -169,11 +224,19 @@ async def bulk_upload_csv(request: Request, file: UploadFile = File(...), _=Depe
                 )
             else:
                 star_rating = 3.0
+            photo_url = ""
+            photo_path_raw = csv_photo_path(row)
+            if photo_path_raw:
+                try:
+                    photo_url = save_photo_from_path(photo_path_raw)
+                    photos_imported += 1
+                except ValueError as exc:
+                    errors.append(f"Row {i} ({name}): {exc}")
             cur.execute(
                 """INSERT INTO players
                    (name, photo_url, role, base_price, stats, status, stars)
-                   VALUES (?, '', ?, ?, ?, 'waiting', ?)""",
-                (name, role, base_price, stats, star_rating),
+                   VALUES (?, ?, ?, ?, ?, 'waiting', ?)""",
+                (name, photo_url, role, base_price, stats, star_rating),
             )
             created += 1
-    return {"created": created, "errors": errors}
+    return {"created": created, "photos_imported": photos_imported, "errors": errors}
