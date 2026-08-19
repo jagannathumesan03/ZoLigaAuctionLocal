@@ -23,7 +23,7 @@ let auctionBaselineReady = false;
     state.auth = await res.json();
     if (state.auth.role === 'team') setupManagerTab();
     if (isBroadcastViewer()) {
-      document.body.classList.add('has-broadcast-camera', 'has-broadcast-viewer');
+      document.body.classList.add('has-broadcast-viewer');
       activateTab('teams');
     }
     init();
@@ -41,48 +41,7 @@ function isManagerViewer() {
 }
 
 function logout() {
-  stopSpotlightCamera();
   fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = '/login');
-}
-
-let spotlightCameraStream = null;
-
-function stopSpotlightCamera() {
-  if (!spotlightCameraStream) return;
-  spotlightCameraStream.getTracks().forEach(track => track.stop());
-  spotlightCameraStream = null;
-  const video = document.getElementById('spotlightCameraVideo');
-  const frame = document.getElementById('spotlightCamera');
-  const start = document.getElementById('spotlightCameraStart');
-  if (video) video.srcObject = null;
-  if (frame) frame.classList.remove('is-live');
-  if (start) start.textContent = 'Start camera';
-}
-
-async function startSpotlightCamera() {
-  const start = document.getElementById('spotlightCameraStart');
-  const video = document.getElementById('spotlightCameraVideo');
-  const frame = document.getElementById('spotlightCamera');
-  if (!video || !frame) return;
-  try {
-    if (start) start.textContent = 'Starting…';
-    spotlightCameraStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { aspectRatio: 1.777, width: { ideal: 1280 }, height: { ideal: 720 } },
-    });
-    video.srcObject = spotlightCameraStream;
-    await video.play();
-    frame.classList.add('is-live');
-  } catch (err) {
-    stopSpotlightCamera();
-    if (start) start.textContent = 'Camera unavailable — click to retry';
-  }
-}
-
-function setupSpotlightCamera() {
-  const start = document.getElementById('spotlightCameraStart');
-  if (!start) return;
-  start.addEventListener('click', startSpotlightCamera);
 }
 
 function setupManagerTab() {
@@ -126,7 +85,6 @@ async function init() {
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
   setInterval(refreshRelativeTimes, 5000);
   setInterval(tickAuctionTimer, 250);
-  if (isBroadcastViewer()) setupSpotlightCamera();
 }
 
 async function loadPlayers() { state.players = await apiFetch('/api/players'); }
@@ -456,7 +414,7 @@ function renderSpotlight() {
   const call = activeCallState();
   const isNewBid = state.lastSpotlightBid !== null && state.lastSpotlightBid !== bidAmount;
 
-  const showBidHistory = isManagerViewer();
+  const showBidHistory = isManagerViewer() || isBroadcastViewer();
   container.innerHTML = `
     <div class="spotlight fifa-card${showBidHistory ? ' has-bid-panel' : ''} ${cardTierClass(current.card_tier)}">
       ${call ? callBannerHtml(call) : ''}
