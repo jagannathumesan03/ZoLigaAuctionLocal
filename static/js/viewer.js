@@ -22,7 +22,10 @@ let auctionBaselineReady = false;
     if (!res.ok) throw new Error();
     state.auth = await res.json();
     if (state.auth.role === 'team') setupManagerTab();
-    if (isBroadcastViewer()) document.body.classList.add('has-broadcast-camera');
+    if (isBroadcastViewer()) {
+      document.body.classList.add('has-broadcast-camera', 'has-broadcast-viewer');
+      activateTab('teams');
+    }
     init();
   } catch (e) {
     window.location.href = '/login';
