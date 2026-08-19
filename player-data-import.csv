@@ -33,18 +33,18 @@ Jithin Murali,Defender | Midfielder,30,Zoho Chennai,3.5,Player_Images/jithin_mur
 Sandeep A,Forward,30,Zoho Chennai,3.5,Player_Images/sandeep.png
 Arjun S (Gallant),Midfielder | Forward,30,Zoho Chennai,3.5,Player_Images/gallant.png
 Harikrishnan K,Defender | Forward,30,Zoho Chennai,3,Player_Images/harikrishnan.png
-Hashim,Forward,30,Ex Zoho,3.5,Player_Images/hashim.jpeg
-Adarsh,Midfielder,30,Ex Zoho,3.5,Player_Images/adarsh.jpeg
-Elan,Defender | Midfielder,30,Ex Zoho,5,Player_Images/elan.png
-Joe,Defender,30,Ex Zoho,3,Player_Images/joe.jpeg
-Dickson,Defender | Midfielder,30,Ex Zoho,5,Player_Images/dickson.jpeg
-Abhishek,Forward,30,Ex Zoho,3.5,
-Srirag,Forward,30,Ex Zoho,3.5,Player_Images/sreerag.jpeg
-Keshab,Forward,30,Ex Zoho,3.5,Player_Images/keshab.jpeg
-Jeejo,Midfielder | Forward,30,Ex Zoho,5,Player_Images/jeejo.jpeg
-Musthu,Defender,30,Ex Zoho,3,
-Samu,Defender,30,Ex Zoho,5,
-Jojo,Forward,30,Ex Zoho,4,Player_Images/jojo.jpeg
+Hashim,Forward,30,Non-Zoho,3.5,Player_Images/hashim.jpeg
+Adarsh,Midfielder,30,Non-Zoho,3.5,Player_Images/adarsh.jpeg
+Elan,Defender | Midfielder,30,Non-Zoho,5,Player_Images/elan.png
+Joe,Defender,30,Non-Zoho,3,Player_Images/joe.jpeg
+Dickson,Defender | Midfielder,30,Non-Zoho,5,Player_Images/dickson.jpeg
+Abhishek,Forward,30,Non-Zoho,3.5,
+Srirag,Forward,30,Non-Zoho,3.5,Player_Images/sreerag.jpeg
+Keshab,Forward,30,Non-Zoho,3.5,Player_Images/keshab.jpeg
+Jeejo,Midfielder | Forward,30,Non-Zoho,5,Player_Images/jeejo.jpeg
+Musthu,Defender,30,Non-Zoho,3,
+Samu,Defender,30,Non-Zoho,5,
+Jojo,Forward,30,Non-Zoho,4,Player_Images/jojo.jpeg
 Arjun Nambiar,Defender,30,Zoho Chennai,2,Player_Images/arjun_nambiar.png
 Rahul Vinod,Defender,30,Zoho Kottarakkara,3.5,
 Rejoe Abraham,Forward,30,Zoho Chennai,3.5,Player_Images/rejoe.png
@@ -58,8 +58,8 @@ Femin Francis,Goalkeeper,30,Zoho Kottarakkara,5,
 Gokul Manoj,Defender | Midfielder,30,Zoho Kottarakkara,3.5,
 Harikrishnan P,Midfielder,30,Zoho Kottarakkara,4,Player_Images/Harikrishnan_Nair.png
 Arun V B,Defender | Forward,30,Zoho Kottarakkara,4.5,Player_Images/Arun_V_B.png
-Mithun Das,Midfielder | Forward,30,Ex Zoho,3,Player_Images/MithunDas.jpeg
+Mithun Das,Midfielder | Forward,30,Non-Zoho,3,Player_Images/MithunDas.jpeg
 Arun Kumar,Goalkeeper,30,Zoho Chennai,5,Player_Images/Arun_Kumar.png
 Tamil,Defender | Midfielder,30,Zoho Chennai,3,Player_Images/Tamil.png
 Samuel JN,Forward,30,Zoho Chennai,3.5,Player_Images/Samuel.png
-Paul,Defender,30,Ex Zoho,3.5,
+Paul,Defender,30,Non-Zoho,3.5,

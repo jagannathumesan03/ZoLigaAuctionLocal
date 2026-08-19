@@ -293,6 +293,11 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   background: rgba(38, 215, 125, 0.12);
   border: 1px solid rgba(38, 215, 125, 0.32);
 }
+.affiliation-non-zoho {
+  color: #ffb4a8;
+  background: rgba(255, 120, 96, 0.12);
+  border: 1px solid rgba(255, 120, 96, 0.34);
+}
 .affiliation-ex-zoho {
   color: #ffd68a;
   background: rgba(255, 193, 77, 0.12);

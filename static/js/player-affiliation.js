@@ -1,6 +1,7 @@
 const PLAYER_AFFILIATIONS = [
   'Zoho Chennai',
   'Zoho Kottarakara',
+  'Non-Zoho',
   'Ex Zoho',
   'Ex ZoLiga',
 ];
@@ -8,6 +9,7 @@ const PLAYER_AFFILIATIONS = [
 const AFFILIATION_SLUGS = {
   'Zoho Chennai': 'zoho-chennai',
   'Zoho Kottarakara': 'zoho-kottarakara',
+  'Non-Zoho': 'non-zoho',
   'Ex Zoho': 'ex-zoho',
   'Ex ZoLiga': 'ex-zoliga',
 };

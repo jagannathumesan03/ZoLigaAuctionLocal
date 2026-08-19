@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=affiliation-1">
+<link rel="stylesheet" href="/static/css/style.css?v=affiliation-2">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="admin-page">
@@ -81,7 +81,7 @@
           </label>
         </div>
       </div>
-      <p class="muted mt-8">CSV columns: <code>name, role, base_price, stats, stars, photo_path</code>. Use affiliation values in <code>stats</code>: Zoho Chennai, Zoho Kottarakara, Ex Zoho, or Ex ZoLiga.</p>
+      <p class="muted mt-8">CSV columns: <code>name, role, base_price, stats, stars, photo_path</code>. Use affiliation values in <code>stats</code>: Zoho Chennai, Zoho Kottarakara, Non-Zoho, Ex Zoho, or Ex ZoLiga.</p>
       <div class="filter-row mt-16">
         <input type="search" id="playerSearch" placeholder="Search by name or role" aria-label="Search players">
         <select id="playerStatusFilter" aria-label="Filter players by status">
@@ -198,6 +198,7 @@
           <option value="">—</option>
           <option value="Zoho Chennai">Zoho Chennai</option>
           <option value="Zoho Kottarakara">Zoho Kottarakara</option>
+          <option value="Non-Zoho">Non-Zoho</option>
           <option value="Ex Zoho">Ex Zoho</option>
           <option value="Ex ZoLiga">Ex ZoLiga</option>
         </select>
@@ -272,7 +273,7 @@
 
 <script src="/static/js/confetti.js?v=rules-5"></script>
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
-<script src="/static/js/player-affiliation.js?v=affiliation-1"></script>
+<script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/admin.js?v=affiliation-1"></script>
 </body>
 </html>

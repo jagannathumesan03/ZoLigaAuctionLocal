@@ -74,6 +74,7 @@ BID_HIGH_THRESHOLD_CR = 200
 PLAYER_AFFILIATIONS = (
     "Zoho Chennai",
     "Zoho Kottarakara",
+    "Non-Zoho",
     "Ex Zoho",
     "Ex ZoLiga",
 )
@@ -83,7 +84,8 @@ _AFFILIATION_LOOKUP = {
     "zoho kottarakkara": "Zoho Kottarakara",
     "zoho - chennai": "Zoho Chennai",
     "zoho - kottarakkara": "Zoho Kottarakara",
-    "non-zoho": "Ex Zoho",
+    "non-zoho": "Non-Zoho",
+    "non zoho": "Non-Zoho",
     "ex zoho": "Ex Zoho",
     "ex zoliga": "Ex ZoLiga",
 }
