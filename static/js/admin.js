@@ -77,6 +77,7 @@ async function init() {
 
   document.getElementById('playerSearch').addEventListener('input', renderPlayersList);
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
+  document.getElementById('playerRoleFilter').addEventListener('change', renderPlayersList);
 
   document.getElementById('playerForm').addEventListener('submit', submitPlayerForm);
   document.getElementById('teamForm').addEventListener('submit', submitTeamForm);
@@ -862,10 +863,12 @@ async function undoPlayer(playerId) {
 function getFilteredPlayers() {
   const q = document.getElementById('playerSearch').value.toLowerCase();
   const statusFilter = document.getElementById('playerStatusFilter').value;
+  const roleFilter = document.getElementById('playerRoleFilter').value;
   let list = state.players.filter(p =>
     p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q)
   );
   if (statusFilter) list = list.filter(p => p.status === statusFilter);
+  if (roleFilter) list = list.filter(p => playerHasPosition(p.role, roleFilter));
   return list;
 }
 

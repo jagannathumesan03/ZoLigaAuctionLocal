@@ -83,6 +83,7 @@ async function init() {
   connectSSE();
   document.getElementById('playerSearch').addEventListener('input', renderPlayersList);
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
+  document.getElementById('playerRoleFilter').addEventListener('change', renderPlayersList);
   setInterval(refreshRelativeTimes, 5000);
   setInterval(tickAuctionTimer, 250);
 }
@@ -741,10 +742,12 @@ function renderTeamViewList() {
 function renderPlayersList() {
   const q = document.getElementById('playerSearch').value.toLowerCase();
   const statusFilter = document.getElementById('playerStatusFilter').value;
+  const roleFilter = document.getElementById('playerRoleFilter').value;
   let list = state.players.filter(p =>
     p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q)
   );
   if (statusFilter) list = list.filter(p => p.status === statusFilter);
+  if (roleFilter) list = list.filter(p => playerHasPosition(p.role, roleFilter));
   const container = document.getElementById('playersList');
   if (!list.length) { container.innerHTML = `<div class="empty">No players found.</div>`; return; }
   container.innerHTML = list.map(p => `
@@ -892,19 +895,6 @@ const MATCHDAY_FIVE = [
   { pos: 'MID', x: 50, y: 45 },
   { pos: 'FW', x: 50, y: 20 },
 ];
-
-function roleAbbreviation(role) {
-  const normalizedRole = String(role || '').trim().toLowerCase();
-  const abbreviations = {
-    forward: 'FW', fwd: 'FW', fw: 'FW', st: 'FW', striker: 'FW', attacker: 'FW',
-    midfielder: 'MID', middle: 'MID', mid: 'MID', cm: 'MID',
-    defender: 'DEF', defence: 'DEF', defense: 'DEF', cb: 'DEF',
-    goalkeeper: 'GK', keeper: 'GK', gk: 'GK',
-  };
-  if (abbreviations[normalizedRole]) return abbreviations[normalizedRole];
-  const short = normalizedRole ? normalizedRole.slice(0, 3).toUpperCase() : '-';
-  return short === 'FWD' ? 'FW' : short;
-}
 
 function teamKitColor(team) {
   const index = Math.max(0, Number(team && team.id) - 1);
