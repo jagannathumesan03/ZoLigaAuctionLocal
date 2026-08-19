@@ -70,6 +70,32 @@ BID_STEP_LOW_CR = 5
 BID_STEP_HIGH_CR = 10
 BID_HIGH_THRESHOLD_CR = 200
 
+# Player affiliation shown on cards (stored in players.stats).
+PLAYER_AFFILIATIONS = (
+    "Zoho Chennai",
+    "Zoho Kottarakara",
+    "Ex Zoho",
+    "Ex ZoLiga",
+)
+_AFFILIATION_LOOKUP = {
+    "zoho chennai": "Zoho Chennai",
+    "zoho kottarakara": "Zoho Kottarakara",
+    "zoho kottarakkara": "Zoho Kottarakara",
+    "zoho - chennai": "Zoho Chennai",
+    "zoho - kottarakkara": "Zoho Kottarakara",
+    "non-zoho": "Ex Zoho",
+    "ex zoho": "Ex Zoho",
+    "ex zoliga": "Ex ZoLiga",
+}
+
+
+def normalize_affiliation(raw: str) -> str:
+    """Map CSV/form input to a canonical affiliation label."""
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    return _AFFILIATION_LOOKUP.get(text.lower(), text)
+
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH)

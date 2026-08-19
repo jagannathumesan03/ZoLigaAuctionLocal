@@ -18,6 +18,7 @@ from backend.database import (
     stars_from_legacy_stats,
     CARD_STAT_FIELDS,
     PLAYER_BASE_PRICE_CR,
+    normalize_affiliation,
 )
 from backend.auth import require_admin, require_any
 
@@ -84,11 +85,37 @@ def save_photo_from_path(raw_path: str) -> str:
 
 
 def csv_photo_path(row: dict) -> str:
-    for key in ("photo_path", "photo", "photo_file", "photo_location"):
+    for key in ("photo_path", "photo", "photo_file", "photo_location", "Photo"):
         value = (row.get(key) or "").strip()
         if value:
-            return value
+            return value.lstrip("/")
     return ""
+
+
+def normalize_csv_row(row: dict) -> dict:
+    """Accept both app CSV headers and spreadsheet exports (Name, Location, Photo, etc.)."""
+    keyed = {}
+    for k, v in row.items():
+        if k is None:
+            continue
+        norm = k.strip().lower().replace(" ", "_")
+        keyed[norm] = v
+
+    def pick(*keys: str) -> str:
+        for key in keys:
+            val = keyed.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+        return ""
+
+    return {
+        "name": pick("name"),
+        "role": pick("role"),
+        "base_price": pick("base_price"),
+        "stats": pick("stats", "location", "affiliation"),
+        "stars": pick("stars", "star"),
+        "photo_path": pick("photo_path", "photo", "photo_file", "photo_location"),
+    }
 
 
 @router.get("")
@@ -142,12 +169,13 @@ def create_player(
 ):
     photo_url = save_photo(photo) if (photo and photo.filename) else ""
     star_rating = clamp_stars(stars)
+    affiliation = normalize_affiliation(stats)
     with db_cursor() as cur:
         cur.execute(
             """INSERT INTO players
                (name, photo_url, role, base_price, stats, status, stars)
                VALUES (?, ?, ?, ?, ?, 'waiting', ?)""",
-            (name, photo_url, role, base_price, stats, star_rating),
+            (name, photo_url, role, base_price, affiliation, star_rating),
         )
         player_id = cur.lastrowid
         cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
@@ -167,6 +195,7 @@ def update_player(
     _=Depends(require_admin),
 ):
     star_rating = clamp_stars(stars)
+    affiliation = normalize_affiliation(stats)
     with db_cursor() as cur:
         cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
         existing = cur.fetchone()
@@ -179,7 +208,7 @@ def update_player(
             """UPDATE players
                SET name=?, photo_url=?, role=?, base_price=?, stats=?, stars=?
                WHERE id=?""",
-            (name, photo_url, role, base_price, stats, star_rating, player_id),
+            (name, photo_url, role, base_price, affiliation, star_rating, player_id),
         )
         cur.execute("SELECT * FROM players WHERE id = ?", (player_id,))
         return enrich_player(row_to_dict(cur.fetchone()))
@@ -204,20 +233,21 @@ async def bulk_upload_csv(request: Request, file: UploadFile = File(...), _=Depe
     errors = []
     with db_cursor() as cur:
         for i, row in enumerate(reader, start=2):
-            name = (row.get("name") or "").strip()
+            fields = normalize_csv_row(row)
+            name = fields["name"]
             if not name:
                 errors.append(f"Row {i}: missing name")
                 continue
-            role = (row.get("role") or "").strip()
-            stats = (row.get("stats") or "").strip()
+            role = fields["role"]
+            stats = normalize_affiliation(fields["stats"])
             try:
-                base_price = int(float(row.get("base_price") or PLAYER_BASE_PRICE_CR))
+                base_price = int(float(fields["base_price"] or PLAYER_BASE_PRICE_CR))
             except ValueError:
                 base_price = PLAYER_BASE_PRICE_CR
             if base_price <= 0:
                 base_price = PLAYER_BASE_PRICE_CR
-            if (row.get("stars") or "").strip():
-                star_rating = clamp_stars(row.get("stars"), 3.0)
+            if fields["stars"]:
+                star_rating = clamp_stars(fields["stars"], 3.0)
             elif any((row.get(f) or "").strip() for f in CARD_STAT_FIELDS):
                 star_rating = stars_from_legacy_stats(
                     {f: clamp_stat(row.get(f)) for f in CARD_STAT_FIELDS}
@@ -225,7 +255,7 @@ async def bulk_upload_csv(request: Request, file: UploadFile = File(...), _=Depe
             else:
                 star_rating = 3.0
             photo_url = ""
-            photo_path_raw = csv_photo_path(row)
+            photo_path_raw = fields["photo_path"]
             if photo_path_raw:
                 try:
                     photo_url = save_photo_from_path(photo_path_raw)

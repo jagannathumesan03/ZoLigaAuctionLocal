@@ -509,6 +509,7 @@ function renderSpotlight() {
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
         ${starsHtml(current, 'star-rating-lg')}
+        ${affiliationBadgeHtml(current.stats, 'affiliation-badge-lg')}
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
           <span class="eyebrow">Highest live bid</span>
@@ -528,7 +529,6 @@ function renderSpotlight() {
                <span class="muted">${escapeHtml(previous.teamName)}</span>
              </div>`
           : ''}
-        ${current.stats ? `<p class="muted">${escapeHtml(current.stats)}</p>` : ''}
         <div class="player-actions">
           <button class="btn btn-primary btn-sm" type="button" onclick="sellToLeader()" ${hasBids ? '' : 'disabled title="Needs a leading bidder first"'}>Sell</button>
           <button class="btn btn-sm" type="button" onclick="undoLastBid()" ${hasHistory ? '' : 'disabled title="No bids to undo"'}>Undo bid</button>
@@ -1017,6 +1017,7 @@ function renderPlayersList() {
       <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
       <div class="player-name">${escapeHtml(p.name)}</div>
       <div class="player-meta">${escapeHtml(p.role || '')}</div>
+      ${affiliationBadgeHtml(p.stats)}
       ${starsHtml(p)}
       <div class="player-price">${fmtMoney(p.base_price)}${p.sold_price ? ' &rarr; ' + fmtMoney(p.sold_price) : ''}</div>
       ${statusBadge(p.status)}
@@ -1042,10 +1043,11 @@ function openPlayerModal(id) {
     document.getElementById('playerName').value = p.name;
     document.getElementById('playerRole').value = p.role || 'Forward';
     document.getElementById('playerBasePrice').value = p.base_price;
-    document.getElementById('playerStats').value = p.stats || '';
+    document.getElementById('playerStats').value = normalizeAffiliation(p.stats || '');
     document.getElementById('playerStars').value = String(starValue(p));
   } else {
     document.getElementById('playerStars').value = '3';
+    document.getElementById('playerStats').value = '';
   }
   document.getElementById('playerModalOverlay').style.display = 'flex';
 }

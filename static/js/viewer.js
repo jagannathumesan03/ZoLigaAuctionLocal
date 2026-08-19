@@ -468,6 +468,7 @@ function renderSpotlight() {
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
         <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
+        ${affiliationBadgeHtml(current.stats, 'affiliation-badge-lg')}
         ${starsHtml(current, 'star-rating-lg')}
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
@@ -653,7 +654,7 @@ function renderManagerDesk() {
 
   const signings = squad.length
     ? `<div class="manager-signings-wrap"><table class="manager-signings-table">
-        <thead><tr><th></th><th>Player</th><th>Pos</th><th>Notes</th><th>Level</th><th class="paid">Paid</th></tr></thead>
+        <thead><tr><th></th><th>Player</th><th>Pos</th><th>Affiliation</th><th>Level</th><th class="paid">Paid</th></tr></thead>
         <tbody>${squad.map(p => {
           const pos = roleAbbreviation(p.role);
           return `
@@ -661,7 +662,7 @@ function renderManagerDesk() {
               <td><img src="${p.photo_url || placeholderImg()}" alt="" style="border-color:${kit}"></td>
               <td>${escapeHtml(p.name)}</td>
               <td><span class="manager-pos-chip" style="background:${POS_COLOR[pos] || '#6b7280'}">${escapeHtml(pos)}</span></td>
-              <td class="muted">${escapeHtml(p.stats || '—')}</td>
+              <td>${affiliationBadgeHtml(p.stats) || '<span class="muted">—</span>'}</td>
               <td class="num">${starsHtml(p, 'star-rating-sm')}</td>
               <td class="paid">${fmtMoney(p.sold_price)}</td>
             </tr>`;
@@ -792,6 +793,7 @@ function renderPlayersList() {
       <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
       <div class="player-name">${escapeHtml(p.name)}</div>
       <div class="player-meta">${escapeHtml(p.role || '')}</div>
+      ${affiliationBadgeHtml(p.stats)}
       ${starsHtml(p)}
       <div class="player-price">${fmtMoney(p.base_price)}${p.sold_price ? ' &rarr; ' + fmtMoney(p.sold_price) : ''}</div>
       ${statusBadge(p.status)}

@@ -1,16 +1,16 @@
 name,role,base_price,stats,stars,photo_path
-Arjun Mehta,Forward,30,"Top scorer last season, 22 goals",5,/Users/jagan-15934/Downloads/anvar.png
-Rohan Kapoor,Midfielder,30,"Excellent passing accuracy, 90%",4,/Users/jagan-15934/Downloads/anvar.png
-Sameer Khan,Defender,30,"Strong tackler, 3 seasons captain",3.5,/Users/jagan-15934/Downloads/anvar.png
-Vikram Singh,Goalkeeper,30,"12 clean sheets last season",3,/Users/jagan-15934/Downloads/anvar.png
-Aditya Rao,Forward,30,"Fast winger, good dribbling",4
-Karan Verma,Midfielder,30,"Box-to-box, high stamina",4.5
-Nikhil Sharma,Defender,30,"Reliable center-back",3
-Rahul Nair,Forward,30,"Prolific striker, 18 goals",5
-Siddharth Iyer,Midfielder,30,"Set piece specialist",3
-Manish Gupta,Defender,30,"Fast full-back, good crosser",2.5
-Fasil,Forward,30,"Live auction forward",4
-Jagan,Forward,30,"High-value forward",5
-Jibin Jose,Defender,30,"Solid centre-back",4
-Najaf,Goalkeeper,30,"Shot-stopper",4
-Anvar,Forward,30,"Sample import with local photo path",4,/Users/jagan-15934/Downloads/anvar.png
+Arjun Mehta,Forward,30,Zoho Chennai,5,/Users/jagan-15934/Downloads/anvar.png
+Rohan Kapoor,Midfielder,30,Zoho Kottarakara,4,/Users/jagan-15934/Downloads/anvar.png
+Sameer Khan,Defender,30,Ex Zoho,3.5,/Users/jagan-15934/Downloads/anvar.png
+Vikram Singh,Goalkeeper,30,Ex ZoLiga,3,/Users/jagan-15934/Downloads/anvar.png
+Aditya Rao,Forward,30,Zoho Chennai,4
+Karan Verma,Midfielder,30,Zoho Kottarakara,4.5
+Nikhil Sharma,Defender,30,Ex Zoho,3
+Rahul Nair,Forward,30,Ex ZoLiga,5
+Siddharth Iyer,Midfielder,30,Zoho Chennai,3
+Manish Gupta,Defender,30,Zoho Kottarakara,2.5
+Fasil,Forward,30,Ex Zoho,4
+Jagan,Forward,30,Ex ZoLiga,5
+Jibin Jose,"Defender,Forward,Midfielder",30,Zoho Chennai,4
+Najaf,Goalkeeper,30,Zoho Kottarakara,4
+Anvar,Forward,30,Ex Zoho,4,/Users/jagan-15934/Downloads/anvar.png

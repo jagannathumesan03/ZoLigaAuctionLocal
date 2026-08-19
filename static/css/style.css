@@ -266,6 +266,45 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
 }
 .player-name { font-weight: 700; font-size: 1rem; }
 .player-meta { font-size: 0.8rem; color: var(--text-dim); }
+.affiliation-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+.affiliation-badge-lg {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  padding: 4px 11px;
+}
+.affiliation-zoho-chennai {
+  color: #8fd4ff;
+  background: rgba(76, 183, 255, 0.14);
+  border: 1px solid rgba(76, 183, 255, 0.34);
+}
+.affiliation-zoho-kottarakara {
+  color: #8ef0b8;
+  background: rgba(38, 215, 125, 0.12);
+  border: 1px solid rgba(38, 215, 125, 0.32);
+}
+.affiliation-ex-zoho {
+  color: #ffd68a;
+  background: rgba(255, 193, 77, 0.12);
+  border: 1px solid rgba(255, 193, 77, 0.34);
+}
+.affiliation-ex-zoliga {
+  color: #d5b6ff;
+  background: rgba(177, 128, 255, 0.14);
+  border: 1px solid rgba(177, 128, 255, 0.34);
+}
+.player-card .affiliation-badge { margin-top: -2px; }
+.spotlight .affiliation-badge-lg { margin: 4px 0 2px; }
 .player-price { font-weight: 700; color: var(--accent); }
 .player-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 
