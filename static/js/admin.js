@@ -8,6 +8,7 @@ let state = {
   draftBidAmount: null,
   draftBidAuctionId: null,
   draftBidFloor: null,
+  selectedPlayerIds: new Set(),
 };
 
 // Tracks whether we've finished the first paint so a mid-session player
@@ -856,18 +857,162 @@ async function undoPlayer(playerId) {
 }
 
 // ---------- Players tab ----------
-function renderPlayersList() {
+function getFilteredPlayers() {
   const q = document.getElementById('playerSearch').value.toLowerCase();
   const statusFilter = document.getElementById('playerStatusFilter').value;
   let list = state.players.filter(p =>
     p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q)
   );
   if (statusFilter) list = list.filter(p => p.status === statusFilter);
+  return list;
+}
+
+function prunePlayerSelection() {
+  const liveIds = new Set(state.players.map(p => p.id));
+  state.selectedPlayerIds.forEach(id => {
+    if (!liveIds.has(id)) state.selectedPlayerIds.delete(id);
+  });
+}
+
+function updatePlayerBulkBar(list = getFilteredPlayers()) {
+  prunePlayerSelection();
+  const count = state.selectedPlayerIds.size;
+  const countEl = document.getElementById('playerBulkCount');
+  const selectAllEl = document.getElementById('playerSelectAll');
+  const undoBtn = document.getElementById('bulkUndoBtn');
+  const deleteBtn = document.getElementById('bulkDeleteBtn');
+  if (!countEl) return;
+
+  countEl.textContent = count === 1 ? '1 selected' : `${count} selected`;
+  if (deleteBtn) deleteBtn.disabled = count === 0;
+
+  const undoable = count > 0 && [...state.selectedPlayerIds].some(id => {
+    const p = state.players.find(x => x.id === id);
+    return p && (p.status === 'sold' || p.status === 'unsold');
+  });
+  if (undoBtn) undoBtn.disabled = !undoable;
+
+  if (selectAllEl) {
+    const visibleIds = list.map(p => p.id);
+    const selectedVisible = visibleIds.filter(id => state.selectedPlayerIds.has(id)).length;
+    selectAllEl.checked = visibleIds.length > 0 && selectedVisible === visibleIds.length;
+    selectAllEl.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
+  }
+}
+
+function togglePlayerSelection(id, checked) {
+  if (checked) state.selectedPlayerIds.add(id);
+  else state.selectedPlayerIds.delete(id);
+  updatePlayerBulkBar();
+  const card = document.querySelector(`.player-card[data-player-id="${id}"]`);
+  if (card) card.classList.toggle('is-selected', checked);
+}
+
+function toggleSelectAllPlayers(checked) {
+  getFilteredPlayers().forEach(p => {
+    if (checked) state.selectedPlayerIds.add(p.id);
+    else state.selectedPlayerIds.delete(p.id);
+  });
+  renderPlayersList();
+}
+
+function clearPlayerSelection() {
+  state.selectedPlayerIds.clear();
+  renderPlayersList();
+}
+
+async function bulkDeletePlayers() {
+  const ids = [...state.selectedPlayerIds];
+  if (!ids.length) return;
+
+  const players = ids.map(id => state.players.find(p => p.id === id)).filter(Boolean);
+  const onAuction = players.filter(p => p.status === 'auction');
+  let toDelete = players;
+  if (onAuction.length) {
+    const skip = !confirm(
+      `${onAuction.length} selected player(s) are currently up for auction and will be skipped. Delete the rest?`
+    );
+    if (!skip) return;
+    toDelete = players.filter(p => p.status !== 'auction');
+  }
+  if (!toDelete.length) {
+    toast('No players eligible for deletion', true);
+    return;
+  }
+  if (!confirm(`Delete ${toDelete.length} player(s) permanently?`)) return;
+
+  let deleted = 0;
+  let failed = 0;
+  for (const p of toDelete) {
+    try {
+      await apiFetch(`/api/players/${p.id}`, { method: 'DELETE' });
+      state.selectedPlayerIds.delete(p.id);
+      deleted++;
+    } catch (e) {
+      failed++;
+    }
+  }
+
+  if (deleted) {
+    toast(`Deleted ${deleted} player(s)` + (failed ? ` (${failed} failed)` : ''));
+    await loadPlayers();
+    renderAll();
+  } else {
+    toast('Could not delete selected players', true);
+  }
+}
+
+async function bulkUndoPlayers() {
+  const ids = [...state.selectedPlayerIds];
+  const undoable = ids
+    .map(id => state.players.find(p => p.id === id))
+    .filter(p => p && (p.status === 'sold' || p.status === 'unsold'));
+  if (!undoable.length) {
+    toast('No sold or unsold players selected', true);
+    return;
+  }
+  if (!confirm(`Undo ${undoable.length} assignment(s) and return those players to the waiting pool?`)) return;
+
+  let reverted = 0;
+  let failed = 0;
+  for (const p of undoable) {
+    try {
+      await apiFetch('/api/auction/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: p.id }),
+      });
+      reverted++;
+    } catch (e) {
+      failed++;
+    }
+  }
+
+  if (reverted) {
+    toast(`Reverted ${reverted} player(s)` + (failed ? ` (${failed} failed)` : ''));
+    await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction()]);
+    renderAll();
+  } else {
+    toast('Could not undo selected players', true);
+  }
+}
+
+function renderPlayersList() {
+  const list = getFilteredPlayers();
+  prunePlayerSelection();
 
   const container = document.getElementById('playersList');
-  if (!list.length) { container.innerHTML = `<div class="empty">No players found.</div>`; return; }
+  if (!list.length) {
+    container.innerHTML = `<div class="empty">No players found.</div>`;
+    updatePlayerBulkBar(list);
+    return;
+  }
   container.innerHTML = list.map(p => `
-    <div class="player-card fifa-card ${cardTierClass(p.card_tier)}">
+    <div class="player-card fifa-card ${cardTierClass(p.card_tier)}${state.selectedPlayerIds.has(p.id) ? ' is-selected' : ''}" data-player-id="${p.id}">
+      <label class="player-select" onclick="event.stopPropagation()">
+        <input type="checkbox" class="player-select-cb" ${state.selectedPlayerIds.has(p.id) ? 'checked' : ''}
+          onchange="togglePlayerSelection(${p.id}, this.checked)" aria-label="Select ${escapeHtml(p.name)}">
+      </label>
       ${ratingBadgeHtml(p)}
       <img class="player-photo" src="${p.photo_url || placeholderImg()}" alt="">
       <div class="player-name">${escapeHtml(p.name)}</div>
@@ -884,6 +1029,7 @@ function renderPlayersList() {
       </div>
     </div>
   `).join('');
+  updatePlayerBulkBar(list);
 }
 
 function openPlayerModal(id) {
@@ -932,6 +1078,7 @@ async function deletePlayer(id) {
   if (!confirm('Delete this player permanently?')) return;
   try {
     await apiFetch(`/api/players/${id}`, { method: 'DELETE' });
+    state.selectedPlayerIds.delete(id);
     toast('Player deleted');
     await loadPlayers();
     renderAll();

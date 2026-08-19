@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=rules-13">
+<link rel="stylesheet" href="/static/css/style.css?v=admin-multiselect-1">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="admin-page">
@@ -90,6 +90,18 @@
           <option value="sold">Sold</option>
           <option value="unsold">Unsold</option>
         </select>
+      </div>
+      <div class="player-bulk-bar mt-16" id="playerBulkBar">
+        <label class="player-select-all">
+          <input type="checkbox" id="playerSelectAll" onchange="toggleSelectAllPlayers(this.checked)">
+          <span>Select all shown</span>
+        </label>
+        <span class="player-bulk-count" id="playerBulkCount">0 selected</span>
+        <div class="toolbar-actions">
+          <button class="btn btn-sm btn-warn" type="button" id="bulkUndoBtn" disabled onclick="bulkUndoPlayers()">Undo selected</button>
+          <button class="btn btn-sm btn-danger" type="button" id="bulkDeleteBtn" disabled onclick="bulkDeletePlayers()">Delete selected</button>
+          <button class="btn btn-sm" type="button" onclick="clearPlayerSelection()">Clear</button>
+        </div>
       </div>
       <div id="playersList" class="grid grid-players mt-16"></div>
     </div>
@@ -250,6 +262,6 @@
 
 <script src="/static/js/confetti.js?v=rules-5"></script>
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
-<script src="/static/js/admin.js?v=rules-5"></script>
+<script src="/static/js/admin.js?v=admin-multiselect-1"></script>
 </body>
 </html>
