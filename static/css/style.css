@@ -309,7 +309,23 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
   border: 1px solid rgba(177, 128, 255, 0.34);
 }
 .player-card .affiliation-badge { margin-top: -2px; }
-.spotlight .affiliation-badge-lg { margin: 4px 0 2px; }
+.spotlight-player-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 4px;
+  width: 100%;
+}
+.spotlight-player-meta .affiliation-badge {
+  align-self: center;
+}
+.viewer-page .spotlight .spotlight-player-meta,
+.spotlight .spotlight-player-meta {
+  align-items: center;
+}
+.spotlight-player-meta .star-rating-lg { margin: 0; }
+.spotlight .affiliation-badge-lg { margin: 0; }
 .player-price { font-weight: 700; color: var(--accent); }
 .player-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 
@@ -1442,8 +1458,12 @@ h1, h2, h3 { letter-spacing: 0; }
   padding: 16px 24px;
 }
 .viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .info .auction-state-label,
-.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .info .position-badge {
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .info .position-badge,
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .spotlight-player-meta {
   align-self: center;
+}
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .spotlight-player-meta {
+  align-items: center;
 }
 .viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .leading-team-row {
   justify-content: center;
@@ -1796,6 +1816,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .star-rating-inline { display: inline-flex; margin: 0 0 0 4px; font-size: 1rem; vertical-align: middle; }
 .player-card .star-rating { margin-top: 10px; }
 .spotlight .star-rating-lg { margin: 12px 0 8px; }
+.spotlight-player-meta .star-rating-lg { margin: 0; }
 .sale-celebration .star-rating { margin: 10px 0 5px; }
 
 [data-theme="light"] .star-rating .star-glyph.is-full,

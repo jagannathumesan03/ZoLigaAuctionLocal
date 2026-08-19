@@ -467,9 +467,11 @@ function renderSpotlight() {
       <div class="info">
         <p class="eyebrow auction-state-label${hasBids ? ' is-bidding' : ''}">${hasBids ? 'Bidding' : 'Now auctioning'}</p>
         <h2>${escapeHtml(current.name)}</h2>
-        <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
-        ${affiliationBadgeHtml(current.stats, 'affiliation-badge-lg')}
-        ${starsHtml(current, 'star-rating-lg')}
+        <div class="spotlight-player-meta">
+          <span class="badge position-badge">${escapeHtml(current.role || 'Player')}</span>
+          ${affiliationBadgeHtml(current.stats, 'affiliation-badge-lg')}
+          ${starsHtml(current, 'star-rating-lg')}
+        </div>
         <div class="muted spotlight-base-price">Base price ${fmtMoney(current.base_price)}</div>
         <div class="current-bid-block">
           <span class="eyebrow">Current bid</span>
