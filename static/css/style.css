@@ -1310,6 +1310,50 @@ h1, h2, h3 { letter-spacing: 0; }
 .viewer-page .bid-amount-display { color: #1de58a; font-size: clamp(2rem, 4vw, 3rem); }
 .viewer-page .spotlight .star-rating-lg { font-size: 2.15rem; }
 
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel):not(.spotlight-waiting) {
+  align-items: stretch;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.viewer-page.has-broadcast-viewer .viewer-window > #spotlight {
+  align-self: center;
+}
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .spotlight-photo-wrap {
+  position: relative;
+  flex: 0 0 220px;
+  width: 220px;
+  align-self: stretch;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #0e141b;
+}
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .spotlight-photo-wrap .spotlight-player-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .info {
+  justify-content: center;
+  align-items: center;
+  align-self: stretch;
+  text-align: center;
+  padding: 16px 24px;
+}
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .info .auction-state-label,
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .info .position-badge {
+  align-self: center;
+}
+.viewer-page.has-broadcast-viewer .spotlight:not(.has-bid-panel) .leading-team-row {
+  justify-content: center;
+}
+
 /* Bid activity lives in the empty right half of the live spotlight card. */
 .spotlight-bid-panel {
   display: flex;
@@ -1387,6 +1431,33 @@ h1, h2, h3 { letter-spacing: 0; }
 .viewer-page .section-heading.compact h2 { color: #dce6fc; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; }
 .viewer-page .grid-teams { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
 
+.viewer-page.has-broadcast-viewer .tabs,
+.viewer-page.has-broadcast-viewer #tab-players,
+.viewer-page.has-broadcast-viewer #tab-team-view,
+.viewer-page.has-broadcast-viewer #tab-manager { display: none !important; }
+.viewer-page.has-broadcast-viewer #tab-teams { display: block; }
+.viewer-page.has-broadcast-viewer .grid-teams {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.viewer-page.has-broadcast-viewer .team-tile {
+  min-height: 118px;
+  padding: 16px 18px;
+  gap: 14px;
+  border-radius: 10px;
+}
+.viewer-page.has-broadcast-viewer .team-tile .team-logo {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+}
+.viewer-page.has-broadcast-viewer .team-tile-name { font-size: 0.95rem; }
+.viewer-page.has-broadcast-viewer .team-tile-purse { font-size: 1.2rem; }
+.viewer-page.has-broadcast-viewer .team-tile-max { font-size: 0.8rem; }
+.viewer-page.has-broadcast-viewer .team-tile-keep { font-size: 0.72rem; }
+.viewer-page.has-broadcast-viewer .team-tile-slots { font-size: 0.78rem; }
+.viewer-page.has-broadcast-viewer .team-tile .purse-bar { height: 6px; margin-top: 8px; }
+
 /* Team purses -- compact live-sports tiles: logo, name, remaining purse,
    slim bar. The currently-leading team gets a subtle highlight, nothing more. */
 .team-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid rgba(79, 103, 165, 0.26); border-radius: 6px; background: linear-gradient(145deg, rgba(13, 29, 62, 0.88), rgba(10, 21, 45, 0.84)); transition: border-color 140ms ease, background 140ms ease; }
@@ -1462,6 +1533,10 @@ h1, h2, h3 { letter-spacing: 0; }
 @media (max-width: 680px) {
   .auction-status-strip { flex-wrap: wrap; }
   .status-chip { flex: 1 1 40%; }
+}
+
+@media (max-width: 1100px) {
+  .viewer-page.has-broadcast-viewer .grid-teams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 620px) {
