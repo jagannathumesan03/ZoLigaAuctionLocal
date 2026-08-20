@@ -85,6 +85,7 @@ async function init() {
   document.getElementById('playerSearch').addEventListener('input', renderPlayersList);
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
   document.getElementById('playerRoleFilter').addEventListener('change', renderPlayersList);
+  document.getElementById('playerStarsFilter').addEventListener('change', renderPlayersList);
   setInterval(refreshRelativeTimes, 5000);
   setInterval(tickAuctionTimer, 250);
 }
@@ -105,6 +106,17 @@ function waitingSpotlightStyle() {
   const url = state.waitingBackgroundUrl;
   if (!url) return '';
   return ` style="--waiting-bg-image: url('${String(url).replace(/'/g, "\\'")}')"`;
+}
+
+function auctionablePlayers() {
+  return state.players.filter(p => p.status === 'waiting' || p.status === 'unsold');
+}
+
+function isAuctionComplete() {
+  return state.players.length > 0
+    && !state.currentAuction
+    && !packRevealInProgress
+    && auctionablePlayers().length === 0;
 }
 
 function renderAll() {
@@ -401,13 +413,16 @@ function renderSpotlight() {
   if (!current) {
     const result = packRevealInProgress ? null : activeRecentResult();
     const hasBg = !!state.waitingBackgroundUrl;
+    let waitingTitle = 'Waiting for the next player…';
+    if (packRevealInProgress) waitingTitle = 'Revealing the next player…';
+    else if (isAuctionComplete()) waitingTitle = 'Auction has been completed';
     container.innerHTML = result
       ? resultStateHtml(result)
       : `
         <div class="spotlight spotlight-waiting${hasBg ? ' has-waiting-bg' : ''}"${waitingSpotlightStyle()}>
           <div class="empty-state">
             <p class="eyebrow">Auction desk</p>
-            <h2>${packRevealInProgress ? 'Revealing the next player…' : 'Waiting for the next player…'}</h2>
+            <h2>${waitingTitle}</h2>
           </div>
         </div>`;
     renderAuctionTimerDock();
@@ -663,7 +678,7 @@ function renderManagerDesk() {
           <div><span>Slots after</span><strong>${current ? Math.max(0, slotsAfter) : slotsLeft}</strong></div>
         </div>
         <p class="muted">${!current
-          ? 'Waiting for the next player.'
+          ? (isAuctionComplete() ? 'Auction has been completed.' : 'Waiting for the next player.')
           : !affordable
             ? (slotsLeft === 0
               ? 'Squad complete — you are out of this lot.'
@@ -748,11 +763,16 @@ function renderPlayersList() {
   const q = document.getElementById('playerSearch').value.toLowerCase();
   const statusFilter = document.getElementById('playerStatusFilter').value;
   const roleFilter = document.getElementById('playerRoleFilter').value;
+  const starsFilter = document.getElementById('playerStarsFilter').value;
   let list = state.players.filter(p =>
     p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q)
   );
   if (statusFilter) list = list.filter(p => p.status === statusFilter);
   if (roleFilter) list = list.filter(p => playerHasPosition(p.role, roleFilter));
+  if (starsFilter) {
+    const target = parseFloat(starsFilter);
+    list = list.filter(p => starValue(p) === target);
+  }
   const container = document.getElementById('playersList');
   if (!list.length) { container.innerHTML = `<div class="empty">No players found.</div>`; return; }
   container.innerHTML = list.map(p => `
@@ -791,6 +811,7 @@ function buildPrimaryTickerText() {
   // Live auction details already fill the spotlight — keep primary empty
   // so the marquee isn't repeating the same player / bid / leader line.
   if (state.currentAuction) return '';
+  if (isAuctionComplete()) return 'Auction has been completed';
   return 'Waiting for the next player…';
 }
 

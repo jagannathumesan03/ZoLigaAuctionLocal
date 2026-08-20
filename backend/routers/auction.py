@@ -103,6 +103,47 @@ def full_player(cur, player_id):
     return enrich_player(row_to_dict(cur.fetchone()))
 
 
+def mark_player_unsold(cur, player_id: int):
+    """Mark player unsold and stamp queue order for later re-auction."""
+    cur.execute(
+        """
+        UPDATE players
+        SET status = 'unsold',
+            team_id = NULL,
+            sold_price = NULL,
+            auction_ends_at = NULL,
+            auction_timer_paused = 0,
+            auction_remaining_seconds = NULL,
+            auction_reveal_until = NULL,
+            unsold_at = ?
+        WHERE id = ?
+        """,
+        (to_iso(utc_now()), player_id),
+    )
+    clear_bid_state(cur, player_id)
+    return full_player(cur, player_id)
+
+
+def pick_next_auction_player_id(cur):
+    """Prefer waiting players (random). Only after that pool is empty, take the
+    earliest unsold player (FIFO: first unsold comes back before later ones)."""
+    cur.execute("SELECT id FROM players WHERE status = 'waiting'")
+    waiting = cur.fetchall()
+    if waiting:
+        return random.choice(waiting)["id"]
+
+    cur.execute(
+        """
+        SELECT id FROM players
+        WHERE status = 'unsold'
+        ORDER BY COALESCE(unsold_at, '9999-12-31'), id ASC
+        LIMIT 1
+        """
+    )
+    unsold = cur.fetchone()
+    return unsold["id"] if unsold else None
+
+
 def get_bid_history(cur, player_id):
     cur.execute(
         """
@@ -162,7 +203,11 @@ async def set_current(body: PlayerIdBody, request: Request, _=Depends(require_ad
 
 @router.post("/start")
 async def start_auction(request: Request, _=Depends(require_admin)):
-    """Pick a random waiting/unsold player and put them up for auction."""
+    """Pick the next player for auction.
+
+    Waiting players are drawn at random. Unsold players only return after every
+    waiting player has been auctioned, in the order they were marked unsold.
+    """
     with db_cursor() as cur:
         cur.execute("SELECT id FROM players WHERE status = 'auction' LIMIT 1")
         if cur.fetchone():
@@ -170,13 +215,9 @@ async def start_auction(request: Request, _=Depends(require_admin)):
                 status_code=400,
                 detail="A player is already up for auction — finish or mark unsold first",
             )
-        cur.execute(
-            "SELECT id FROM players WHERE status IN ('waiting', 'unsold') ORDER BY id"
-        )
-        pool = cur.fetchall()
-        if not pool:
+        chosen_id = pick_next_auction_player_id(cur)
+        if not chosen_id:
             raise HTTPException(status_code=400, detail="No players left in the pool")
-        chosen_id = random.choice(pool)["id"]
         result = put_player_up(cur, chosen_id)
     await broadcaster.publish("current_player", result)
     return result
@@ -231,7 +272,8 @@ def put_player_up(cur, player_id: int):
             auction_ends_at = ?,
             auction_timer_paused = 0,
             auction_remaining_seconds = NULL,
-            auction_reveal_until = ?
+            auction_reveal_until = ?,
+            unsold_at = NULL
         WHERE id = ?
         """,
         (ends_at, reveal_until, player_id),
@@ -440,7 +482,7 @@ def _try_assign(cur, player_id, team_id, sold_price):
         )
 
     cur.execute(
-        "UPDATE players SET status='sold', sold_price=?, team_id=?, auction_ends_at=NULL WHERE id=?",
+        "UPDATE players SET status='sold', sold_price=?, team_id=?, auction_ends_at=NULL, unsold_at=NULL WHERE id=?",
         (sold_price, team_id, player_id),
     )
     cur.execute(
@@ -472,12 +514,7 @@ async def mark_unsold(body: PlayerIdBody, request: Request, _=Depends(require_ad
         cur.execute("SELECT * FROM players WHERE id = ?", (body.player_id,))
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Player not found")
-        cur.execute(
-            "UPDATE players SET status='unsold', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
-            (body.player_id,),
-        )
-        clear_bid_state(cur, body.player_id)
-        result = full_player(cur, body.player_id)
+        result = mark_player_unsold(cur, body.player_id)
 
     await _publish_unsold(result)
     return result
@@ -529,7 +566,7 @@ async def undo_assignment(body: PlayerIdBody, request: Request, _=Depends(requir
             refunded_team = row_to_dict(cur.fetchone())
 
         cur.execute(
-            "UPDATE players SET status='waiting', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
+            "UPDATE players SET status='waiting', team_id=NULL, sold_price=NULL, auction_ends_at=NULL, unsold_at=NULL WHERE id=?",
             (body.player_id,),
         )
         clear_bid_state(cur, body.player_id)
@@ -571,19 +608,11 @@ async def expire_auction_if_needed():
                 player_result, team_result = _try_assign(cur, player_id, team_id, sold_price)
                 expired = ("sold", player_result, team_result)
             except ValueError:
-                cur.execute(
-                    "UPDATE players SET status='unsold', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
-                    (player_id,),
-                )
-                clear_bid_state(cur, player_id)
-                expired = ("unsold", full_player(cur, player_id), None)
+                player_result = mark_player_unsold(cur, player_id)
+                expired = ("unsold", player_result, None)
         else:
-            cur.execute(
-                "UPDATE players SET status='unsold', team_id=NULL, sold_price=NULL, auction_ends_at=NULL WHERE id=?",
-                (player_id,),
-            )
-            clear_bid_state(cur, player_id)
-            expired = ("unsold", full_player(cur, player_id), None)
+            player_result = mark_player_unsold(cur, player_id)
+            expired = ("unsold", player_result, None)
 
     if not expired:
         return

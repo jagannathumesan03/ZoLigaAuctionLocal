@@ -79,6 +79,7 @@ async function init() {
   document.getElementById('playerSearch').addEventListener('input', renderPlayersList);
   document.getElementById('playerStatusFilter').addEventListener('change', renderPlayersList);
   document.getElementById('playerRoleFilter').addEventListener('change', renderPlayersList);
+  document.getElementById('playerStarsFilter').addEventListener('change', renderPlayersList);
 
   document.getElementById('playerForm').addEventListener('submit', submitPlayerForm);
   document.getElementById('teamForm').addEventListener('submit', submitTeamForm);
@@ -488,12 +489,22 @@ function renderSpotlight() {
   document.getElementById('bidPanelWrapper').style.display = current ? 'block' : 'none';
   if (!current) {
     const hasBg = !!state.waitingBackgroundUrl;
+    const complete = isAuctionComplete();
+    let title = 'No player currently up for auction';
+    let subtitle = '<p class="muted">Press Start auction to draw a random player from the pool.</p>';
+    if (packRevealInProgress) {
+      title = 'Revealing the next player…';
+      subtitle = '';
+    } else if (complete) {
+      title = 'Auction has been completed';
+      subtitle = '<p class="muted">Every player has been through the auction desk.</p>';
+    }
     container.innerHTML = `
       <div class="spotlight spotlight-waiting${hasBg ? ' has-waiting-bg' : ''}"${waitingSpotlightStyle()}>
         <div class="empty-state">
           <p class="eyebrow">Auction desk</p>
-          <h2>${packRevealInProgress ? 'Revealing the next player…' : 'No player currently up for auction'}</h2>
-          ${packRevealInProgress ? '' : '<p class="muted">Press Start auction to draw a random player from the pool.</p>'}
+          <h2>${title}</h2>
+          ${subtitle}
         </div>
       </div>`;
     return;
@@ -808,6 +819,13 @@ function poolPlayers() {
   return state.players.filter(p => p.status === 'waiting' || p.status === 'unsold');
 }
 
+function isAuctionComplete() {
+  return state.players.length > 0
+    && !state.currentAuction
+    && !packRevealInProgress
+    && poolPlayers().length === 0;
+}
+
 function renderAuctionControls() {
   const countEl = document.getElementById('auctionPoolCount');
   const btn = document.getElementById('startAuctionBtn');
@@ -871,11 +889,16 @@ function getFilteredPlayers() {
   const q = document.getElementById('playerSearch').value.toLowerCase();
   const statusFilter = document.getElementById('playerStatusFilter').value;
   const roleFilter = document.getElementById('playerRoleFilter').value;
+  const starsFilter = document.getElementById('playerStarsFilter').value;
   let list = state.players.filter(p =>
     p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q)
   );
   if (statusFilter) list = list.filter(p => p.status === statusFilter);
   if (roleFilter) list = list.filter(p => playerHasPosition(p.role, roleFilter));
+  if (starsFilter) {
+    const target = parseFloat(starsFilter);
+    list = list.filter(p => starValue(p) === target);
+  }
   return list;
 }
 

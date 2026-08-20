@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=affiliation-5">
+<link rel="stylesheet" href="/static/css/style.css?v=stars-filter-1">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="admin-page">
@@ -97,6 +97,16 @@
           <option value="DEF">Defender</option>
           <option value="MID">Midfielder</option>
           <option value="FW">Forward</option>
+        </select>
+        <select id="playerStarsFilter" aria-label="Filter players by stars">
+          <option value="">All stars</option>
+          <option value="5">5 ★</option>
+          <option value="4.5">4.5 ★</option>
+          <option value="4">4 ★</option>
+          <option value="3.5">3.5 ★</option>
+          <option value="3">3 ★</option>
+          <option value="2.5">2.5 ★</option>
+          <option value="2">2 ★</option>
         </select>
       </div>
       <div class="player-bulk-bar mt-16" id="playerBulkBar">
@@ -282,6 +292,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=pack-reveal-hold-1"></script>
+<script src="/static/js/admin.js?v=stars-filter-1"></script>
 </body>
 </html>

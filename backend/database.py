@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS players (
     sold_price INTEGER,
     stats TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'waiting',  -- waiting | auction | sold | unsold
+    unsold_at TEXT,  -- when marked unsold; FIFO re-queue after waiting pool is empty
     team_id INTEGER,
     current_bid_amount INTEGER,
     current_bid_team_id INTEGER,
@@ -147,6 +148,16 @@ def _migrate(cur):
                 "UPDATE players SET stars=? WHERE id=?",
                 (stars_from_legacy_stats(dict(row)), row["id"]),
             )
+    if "unsold_at" not in cols:
+        cur.execute("ALTER TABLE players ADD COLUMN unsold_at TEXT")
+        # Existing unsold players keep relative order by id until re-auctioned.
+        cur.execute(
+            """
+            UPDATE players
+            SET unsold_at = printf('1970-01-01T00:00:%06dZ', id)
+            WHERE status = 'unsold' AND unsold_at IS NULL
+            """
+        )
 
     # One-time fix: the first stars backfill mapped untouched FIFA defaults
     # (overall 50) to 2 stars. Mid-level is 3.

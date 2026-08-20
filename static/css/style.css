@@ -1010,7 +1010,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .squad-item { padding: 7px 8px; border-radius: 5px; background: rgba(6, 15, 23, 0.42); font-size: 0.76rem; }
 .squad-slot-empty { padding: 7px 8px; border-radius: 5px; font-size: 0.72rem; }
 
-.filter-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, minmax(140px, 190px)); gap: 10px; }
+.filter-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, minmax(120px, 170px)); gap: 10px; }
 .player-bulk-bar {
   display: flex;
   align-items: center;
