@@ -644,7 +644,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .previous-bid-row strong { color: #dce6fc; font-size: 0.95rem; }
 .auction-team-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 8px 0 4px;
 }
@@ -1100,6 +1100,7 @@ h1, h2, h3 { letter-spacing: 0; }
   .ticker-wrap { margin-inline: 8px; }
   .spotlight { min-height: 0; }
   .spotlight-photo-wrap .spotlight-player-photo { width: 156px; height: 178px; }
+  .auction-team-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
@@ -1127,6 +1128,7 @@ h1, h2, h3 { letter-spacing: 0; }
   .spotlight .info h2 { font-size: 1.72rem; }
   .bid-amount-display { font-size: 2.35rem; }
   .grid-teams, .grid-players { grid-template-columns: 1fr; }
+  .auction-team-tiles { grid-template-columns: 1fr; }
   .bid-tier-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .bid-tier-btn { min-width: 0; padding-inline: 6px; }
   .bid-summary { align-items: flex-start; flex-direction: column; gap: 4px; }
