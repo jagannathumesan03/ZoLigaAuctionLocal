@@ -14,6 +14,7 @@ let state = {
 // Tracks whether we've finished the first paint so a mid-session player
 // change can fire the pack-reveal animation (same as viewer).
 let auctionBaselineReady = false;
+let packRevealInProgress = false;
 
 // ---------- Auth guard ----------
 (async function guard() {
@@ -252,11 +253,17 @@ function connectSSE() {
       && nextAuctionId !== previousAuctionId
       && typeof window.playPackReveal === 'function';
     state.lastAuctionPlayerId = nextAuctionId;
+    if (shouldReveal) packRevealInProgress = true;
     renderAll();
     if (shouldReveal) {
       window.playPackReveal(state.currentAuction, {
         candidates: state.players,
-        onDone: () => renderSpotlight(),
+        onDone: () => {
+          packRevealInProgress = false;
+          renderSpotlight();
+          renderBidPanel();
+          renderAuctionControls();
+        },
       });
     }
   };
@@ -477,7 +484,7 @@ function previousBidInfo(current) {
 
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
-  const current = state.currentAuction;
+  const current = packRevealInProgress ? null : state.currentAuction;
   document.getElementById('bidPanelWrapper').style.display = current ? 'block' : 'none';
   if (!current) {
     const hasBg = !!state.waitingBackgroundUrl;
@@ -485,8 +492,8 @@ function renderSpotlight() {
       <div class="spotlight spotlight-waiting${hasBg ? ' has-waiting-bg' : ''}"${waitingSpotlightStyle()}>
         <div class="empty-state">
           <p class="eyebrow">Auction desk</p>
-          <h2>No player currently up for auction</h2>
-          <p class="muted">Press Start auction to draw a random player from the pool.</p>
+          <h2>${packRevealInProgress ? 'Revealing the next player…' : 'No player currently up for auction'}</h2>
+          ${packRevealInProgress ? '' : '<p class="muted">Press Start auction to draw a random player from the pool.</p>'}
         </div>
       </div>`;
     return;

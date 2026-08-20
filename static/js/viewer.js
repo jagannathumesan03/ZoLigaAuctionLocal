@@ -14,6 +14,7 @@ let state = {
 // first page load, and not on bid/timer refreshes for the same player).
 let lastAuctionPlayerId = null;
 let auctionBaselineReady = false;
+let packRevealInProgress = false;
 
 // ---------- Auth guard (admins may also view this page) ----------
 (async function guard() {
@@ -148,11 +149,15 @@ function connectSSE() {
       && nextAuctionId !== previousAuctionId
       && typeof window.playPackReveal === 'function';
     lastAuctionPlayerId = nextAuctionId;
+    if (shouldReveal) packRevealInProgress = true;
     renderAll();
     if (shouldReveal) {
       window.playPackReveal(state.currentAuction, {
         candidates: state.players,
-        onDone: () => renderSpotlight(),
+        onDone: () => {
+          packRevealInProgress = false;
+          renderSpotlight();
+        },
       });
     }
   };
@@ -391,10 +396,10 @@ function resultStateHtml(result) {
 
 function renderSpotlight() {
   const container = document.getElementById('spotlight');
-  const current = state.currentAuction;
+  const current = packRevealInProgress ? null : state.currentAuction;
 
   if (!current) {
-    const result = activeRecentResult();
+    const result = packRevealInProgress ? null : activeRecentResult();
     const hasBg = !!state.waitingBackgroundUrl;
     container.innerHTML = result
       ? resultStateHtml(result)
@@ -402,7 +407,7 @@ function renderSpotlight() {
         <div class="spotlight spotlight-waiting${hasBg ? ' has-waiting-bg' : ''}"${waitingSpotlightStyle()}>
           <div class="empty-state">
             <p class="eyebrow">Auction desk</p>
-            <h2>Waiting for the next player…</h2>
+            <h2>${packRevealInProgress ? 'Revealing the next player…' : 'Waiting for the next player…'}</h2>
           </div>
         </div>`;
     renderAuctionTimerDock();
