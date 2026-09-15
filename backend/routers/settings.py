@@ -94,16 +94,26 @@ def _delete_local_file(url):
 
 
 def _save_branding_upload(photo: UploadFile, prefix: str) -> str:
-    if not photo.content_type or not photo.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Please upload an image file")
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    ext = os.path.splitext(photo.filename or "")[1].lower() or ".jpg"
-    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+    filename = photo.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    content_type = (photo.content_type or "").lower()
+    allowed_ext = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+    looks_like_image = content_type.startswith("image/") or ext in allowed_ext
+    if not looks_like_image:
+        raise HTTPException(status_code=400, detail="Please upload an image file (JPG, PNG, WebP, or GIF)")
+    if ext not in allowed_ext:
         ext = ".jpg"
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot create upload folder: {exc}") from exc
     fname = f"{prefix}-{uuid.uuid4().hex}{ext}"
     dest = os.path.join(UPLOAD_DIR, fname)
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(photo.file, f)
+    try:
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(photo.file, f)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot save upload: {exc}") from exc
     return f"/static/uploads/branding/{fname}"
 
 

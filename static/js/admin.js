@@ -64,9 +64,19 @@ function toast(msg, isError = false) {
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options);
   if (!res.ok) {
-    let detail = 'Request failed';
-    try { detail = (await res.json()).detail || detail; } catch (e) {}
-    throw new Error(detail);
+    let detail = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (typeof body.detail === 'string') detail = body.detail;
+      else if (Array.isArray(body.detail)) {
+        detail = body.detail.map(d => d.msg || JSON.stringify(d)).join('; ') || detail;
+      }
+    } catch (e) {
+      if (res.status === 413) {
+        detail = 'File too large for the server. Compress the image (under ~5 MB) and try again.';
+      }
+    }
+    throw new Error(typeof detail === 'string' ? detail : 'Request failed');
   }
   return res.status === 204 ? null : res.json();
 }
@@ -317,13 +327,25 @@ async function uploadWaitingBackground(event) {
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
   if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    toast('Image is too large (max ~8 MB). Compress it and try again.', true);
+    return;
+  }
   const form = new FormData();
   form.append('photo', file);
   try {
     const res = await fetch('/api/settings/waiting-background', { method: 'POST', body: form });
     if (!res.ok) {
-      let detail = 'Upload failed';
-      try { detail = (await res.json()).detail || detail; } catch (e) {}
+      let detail = `Upload failed (${res.status})`;
+      try {
+        const body = await res.json();
+        if (typeof body.detail === 'string') detail = body.detail;
+        else if (Array.isArray(body.detail)) {
+          detail = body.detail.map(d => d.msg || JSON.stringify(d)).join('; ') || detail;
+        }
+      } catch (e) {
+        if (res.status === 413) detail = 'File too large for the server. Compress the image and try again.';
+      }
       throw new Error(detail);
     }
     const data = await res.json();
@@ -352,13 +374,25 @@ async function uploadJerseySizeChart(event) {
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
   if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    toast('Image is too large (max ~8 MB). Compress it and try again.', true);
+    return;
+  }
   const form = new FormData();
   form.append('photo', file);
   try {
     const res = await fetch('/api/settings/jersey-size-chart', { method: 'POST', body: form });
     if (!res.ok) {
-      let detail = 'Upload failed';
-      try { detail = (await res.json()).detail || detail; } catch (e) {}
+      let detail = `Upload failed (${res.status})`;
+      try {
+        const body = await res.json();
+        if (typeof body.detail === 'string') detail = body.detail;
+        else if (Array.isArray(body.detail)) {
+          detail = body.detail.map(d => d.msg || JSON.stringify(d)).join('; ') || detail;
+        }
+      } catch (e) {
+        if (res.status === 413) detail = 'File too large for the server. Compress the image and try again.';
+      }
       throw new Error(detail);
     }
     const data = await res.json();
@@ -1384,6 +1418,18 @@ async function submitTeamForm(e) {
   if (jerseyFront) fd.append('jersey_front', jerseyFront);
   const jerseyBack = document.getElementById('teamJerseyBack').files[0];
   if (jerseyBack) fd.append('jersey_back', jerseyBack);
+
+  const maxBytes = 8 * 1024 * 1024;
+  for (const [label, file] of [
+    ['Logo', logo],
+    ['Jersey front', jerseyFront],
+    ['Jersey back', jerseyBack],
+  ]) {
+    if (file && file.size > maxBytes) {
+      toast(`${label} is too large (max ~8 MB). Compress it and try again.`, true);
+      return;
+    }
+  }
 
   try {
     await apiFetch(id ? `/api/teams/${id}` : '/api/teams', {

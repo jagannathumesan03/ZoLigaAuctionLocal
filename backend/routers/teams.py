@@ -26,12 +26,29 @@ def save_team_upload(upload: Optional[UploadFile]) -> Optional[str]:
     """Save a team image upload; return public URL or None if nothing uploaded."""
     if not upload or not upload.filename:
         return None
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    ext = os.path.splitext(upload.filename)[1] or ".png"
+    filename = upload.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    content_type = (upload.content_type or "").lower()
+    allowed_ext = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+    looks_like_image = content_type.startswith("image/") or ext in allowed_ext
+    if not looks_like_image:
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload an image file for logo/jersey (JPG, PNG, WebP, or GIF)",
+        )
+    if ext not in allowed_ext:
+        ext = ".png"
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot create team upload folder: {exc}") from exc
     fname = f"{uuid.uuid4().hex}{ext}"
     dest = os.path.join(UPLOAD_DIR, fname)
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(upload.file, f)
+    try:
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(upload.file, f)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot save team image: {exc}") from exc
     return f"/static/uploads/teams/{fname}"
 
 
