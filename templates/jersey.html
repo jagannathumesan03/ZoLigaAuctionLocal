@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jersey Order — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=jersey-public-1">
+<link rel="stylesheet" href="/static/css/style.css?v=jersey-shorts-1">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="jersey-page">
@@ -33,11 +33,11 @@
         </select>
       </div>
       <div class="field">
-        <label for="jerseyPlayerName">Player name</label>
+        <label for="jerseyPlayerName">Player name <span class="muted">(optional)</span></label>
         <input type="text" id="jerseyPlayerName" placeholder="Name on jersey" autocomplete="off" aria-label="Player name on jersey">
       </div>
       <div class="field">
-        <label for="jerseyNumber">Number</label>
+        <label for="jerseyNumber">Number <span class="muted">(optional)</span></label>
         <input type="text" id="jerseyNumber" placeholder="e.g. 10" inputmode="numeric" autocomplete="off" aria-label="Jersey number">
       </div>
       <div class="field">
@@ -58,6 +58,17 @@
   </div>
 </main>
 
-<script src="/static/js/jersey.js?v=jersey-public-1"></script>
+<div class="modal-overlay" id="jerseyConfirmOverlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="jerseyConfirmTitle">
+  <div class="modal jersey-confirm-modal">
+    <h3 id="jerseyConfirmTitle">Confirm jersey order</h3>
+    <p class="muted" id="jerseyConfirmSummary"></p>
+    <div class="row mt-16">
+      <button type="button" class="btn" id="jerseyConfirmCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="jerseyConfirmOk">Confirm &amp; submit</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/jersey.js?v=jersey-shorts-1"></script>
 </body>
 </html>

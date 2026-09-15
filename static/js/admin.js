@@ -174,7 +174,7 @@ function renderJerseyOrders() {
           ${escapeHtml(o.team_name || 'Team')}
         </span>
       </td>
-      <td>${escapeHtml(o.player_name || '')}</td>
+      <td>${escapeHtml(o.player_name || '—')}</td>
       <td>${escapeHtml(o.jersey_number || '—')}</td>
       <td><strong>${escapeHtml(o.size || '—')}</strong></td>
       <td>
@@ -1418,12 +1418,15 @@ async function submitTeamForm(e) {
   if (jerseyFront) fd.append('jersey_front', jerseyFront);
   const jerseyBack = document.getElementById('teamJerseyBack').files[0];
   if (jerseyBack) fd.append('jersey_back', jerseyBack);
+  const shorts = document.getElementById('teamShorts').files[0];
+  if (shorts) fd.append('shorts', shorts);
 
   const maxBytes = 8 * 1024 * 1024;
   for (const [label, file] of [
     ['Logo', logo],
     ['Jersey front', jerseyFront],
     ['Jersey back', jerseyBack],
+    ['Shorts', shorts],
   ]) {
     if (file && file.size > maxBytes) {
       toast(`${label} is too large (max ~8 MB). Compress it and try again.`, true);

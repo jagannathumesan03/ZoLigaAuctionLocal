@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS teams (
     logo_url TEXT DEFAULT '',
     jersey_front_url TEXT DEFAULT '',
     jersey_back_url TEXT DEFAULT '',
+    shorts_url TEXT DEFAULT '',
     purse_total INTEGER NOT NULL DEFAULT 0,
     purse_remaining INTEGER NOT NULL DEFAULT 0,
     slots_max INTEGER NOT NULL DEFAULT 8,
@@ -197,6 +198,8 @@ def _migrate(cur):
         cur.execute("ALTER TABLE teams ADD COLUMN jersey_front_url TEXT DEFAULT ''")
     if "jersey_back_url" not in team_cols:
         cur.execute("ALTER TABLE teams ADD COLUMN jersey_back_url TEXT DEFAULT ''")
+    if "shorts_url" not in team_cols:
+        cur.execute("ALTER TABLE teams ADD COLUMN shorts_url TEXT DEFAULT ''")
 
     cur.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",

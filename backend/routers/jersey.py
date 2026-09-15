@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/jersey-orders", tags=["jersey"])
 
 class JerseyOrderBody(BaseModel):
     team_id: int
-    player_name: str = Field(min_length=1)
+    player_name: str = ""
     jersey_number: str = ""
     size: str = Field(min_length=1)
 
@@ -96,8 +96,6 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
     """Public — anyone can submit a jersey order from /jersey (no login)."""
     name = (body.player_name or "").strip()
     number = (body.jersey_number or "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Player name is required")
 
     submitted_by = (
         request.session.get("username")

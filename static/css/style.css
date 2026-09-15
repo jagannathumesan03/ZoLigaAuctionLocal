@@ -1691,6 +1691,11 @@ h1, h2, h3 { letter-spacing: 0; }
 .jersey-panel { margin-top: 0; }
 .jersey-page .jersey-shell { max-width: 960px; }
 .jersey-page .jersey-panel { margin-top: 8px; }
+.jersey-confirm-modal { max-width: 420px; }
+.jersey-confirm-modal #jerseyConfirmSummary {
+  margin: 12px 0 0;
+  line-height: 1.6;
+}
 .jersey-controls {
   display: grid;
   grid-template-columns: minmax(160px, 1.1fr) minmax(140px, 1fr) minmax(90px, 0.45fr) minmax(100px, 0.5fr) auto;

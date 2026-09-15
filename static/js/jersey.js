@@ -11,6 +11,8 @@ const jerseyUi = {
   wired: false,
 };
 
+let pendingOrder = null;
+
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options);
   if (!res.ok) {
@@ -57,6 +59,9 @@ function setupJerseyForm() {
   const numberInput = document.getElementById('jerseyNumber');
   const sizeInput = document.getElementById('jerseySize');
   const submitBtn = document.getElementById('jerseySubmitBtn');
+  const cancelBtn = document.getElementById('jerseyConfirmCancel');
+  const okBtn = document.getElementById('jerseyConfirmOk');
+  const overlay = document.getElementById('jerseyConfirmOverlay');
   if (!select || !nameInput || !numberInput || !sizeInput || !submitBtn) return;
 
   select.addEventListener('change', () => {
@@ -65,17 +70,23 @@ function setupJerseyForm() {
   });
   nameInput.addEventListener('input', updateJerseyOverlays);
   numberInput.addEventListener('input', updateJerseyOverlays);
-  submitBtn.addEventListener('click', submitJerseyOrder);
+  submitBtn.addEventListener('click', openJerseyConfirm);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeJerseyConfirm);
+  if (okBtn) okBtn.addEventListener('click', confirmAndSubmitJerseyOrder);
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeJerseyConfirm();
+    });
+  }
   jerseyUi.wired = true;
 }
 
-async function submitJerseyOrder() {
+function openJerseyConfirm() {
   const statusEl = document.getElementById('jerseySubmitStatus');
   const select = document.getElementById('jerseyTeamSelect');
   const nameInput = document.getElementById('jerseyPlayerName');
   const numberInput = document.getElementById('jerseyNumber');
   const sizeInput = document.getElementById('jerseySize');
-  const submitBtn = document.getElementById('jerseySubmitBtn');
   const teamId = Number(jerseyUi.teamId || (select && select.value) || 0);
   const playerName = (nameInput && nameInput.value || '').trim();
   const jerseyNumber = (numberInput && numberInput.value || '').trim();
@@ -88,27 +99,65 @@ async function submitJerseyOrder() {
   };
 
   if (!teamId) { setStatus('Select a team first.', true); return; }
-  if (!playerName) { setStatus('Enter the name for the jersey.', true); return; }
   if (!size) { setStatus('Choose a jersey size.', true); return; }
 
+  const team = state.teams.find(t => String(t.id) === String(teamId));
+  const teamName = team ? team.name : 'Selected team';
+  pendingOrder = { team_id: teamId, player_name: playerName, jersey_number: jerseyNumber, size };
+
+  const summary = document.getElementById('jerseyConfirmSummary');
+  if (summary) {
+    summary.innerHTML = `
+      <strong>${escapeHtml(teamName)}</strong><br>
+      Name: ${playerName ? escapeHtml(playerName) : '<em>none</em>'}<br>
+      Number: ${jerseyNumber ? escapeHtml(jerseyNumber) : '<em>none</em>'}<br>
+      Size: <strong>${escapeHtml(size)}</strong>`;
+  }
+  const overlay = document.getElementById('jerseyConfirmOverlay');
+  if (overlay) overlay.style.display = 'flex';
+  setStatus('');
+}
+
+function closeJerseyConfirm() {
+  pendingOrder = null;
+  const overlay = document.getElementById('jerseyConfirmOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function confirmAndSubmitJerseyOrder() {
+  if (!pendingOrder) return;
+  const order = pendingOrder;
+  const statusEl = document.getElementById('jerseySubmitStatus');
+  const submitBtn = document.getElementById('jerseySubmitBtn');
+  const okBtn = document.getElementById('jerseyConfirmOk');
+
+  const setStatus = (msg, isError = false) => {
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.classList.toggle('is-error', !!isError);
+  };
+
+  closeJerseyConfirm();
   if (submitBtn) submitBtn.disabled = true;
+  if (okBtn) okBtn.disabled = true;
   setStatus('Submitting order…');
   try {
     await apiFetch('/api/jersey-orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        team_id: teamId,
-        player_name: playerName,
-        jersey_number: jerseyNumber,
-        size,
-      }),
+      body: JSON.stringify(order),
     });
-    setStatus(`Order saved: ${playerName}${jerseyNumber ? ` #${jerseyNumber}` : ''} · ${size}`);
+    const label = [
+      order.player_name || null,
+      order.jersey_number ? `#${order.jersey_number}` : null,
+      order.size,
+    ].filter(Boolean).join(' · ');
+    setStatus(`Order saved: ${label}`);
   } catch (err) {
     setStatus(err.message || 'Could not save jersey order', true);
   } finally {
     if (submitBtn) submitBtn.disabled = false;
+    if (okBtn) okBtn.disabled = false;
   }
 }
 
@@ -119,7 +168,7 @@ function renderJerseyPage() {
   fillJerseySizeOptions();
 
   const signature = state.teams.map(t =>
-    `${t.id}:${t.jersey_front_url || ''}:${t.jersey_back_url || ''}:${t.name}`
+    `${t.id}:${t.jersey_front_url || ''}:${t.jersey_back_url || ''}:${t.shorts_url || ''}:${t.name}`
   ).join('|');
   const selection = jerseyUi.teamId || select.value;
 
@@ -192,10 +241,11 @@ function paintJerseyPreview() {
 
   const front = team.jersey_front_url || '';
   const back = team.jersey_back_url || '';
-  const paintKey = `back-only-v1|${team.id}|${front}|${back}`;
-  if (!front && !back) {
+  const shorts = team.shorts_url || '';
+  const paintKey = `kit-v2|${team.id}|${front}|${back}|${shorts}`;
+  if (!front && !back && !shorts) {
     preview.dataset.paintKey = paintKey;
-    preview.innerHTML = `<p class="muted jersey-empty">No jersey uploaded yet for ${escapeHtml(team.name)}.</p>`;
+    preview.innerHTML = `<p class="muted jersey-empty">No kit uploaded yet for ${escapeHtml(team.name)}.</p>`;
     return;
   }
 
@@ -235,6 +285,15 @@ function paintJerseyPreview() {
             </svg>
             <span class="jersey-overlay jersey-overlay-number" data-jersey-number>${escapeHtml(number)}</span>
           </div>
+        </div>
+      </div>`);
+  }
+  if (shorts) {
+    sides.push(`
+      <div class="jersey-side">
+        <p class="jersey-side-label">Shorts</p>
+        <div class="jersey-image-wrap jersey-image-wrap-shorts">
+          <img src="${shorts}" alt="${escapeHtml(team.name)} shorts">
         </div>
       </div>`);
   }
