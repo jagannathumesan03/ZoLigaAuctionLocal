@@ -6,6 +6,14 @@ let state = {
   waitingBackgroundUrl: '',
   jerseySizeChartUrl: '',
   jerseySizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
+  jerseyFormFields: {
+    team: { enabled: true, required: true },
+    player_name: { enabled: true, required: false },
+    jersey_number: { enabled: true, required: false },
+    size: { enabled: true, required: true },
+    custom: [],
+    order: ['team', 'player_name', 'jersey_number', 'size'],
+  },
   startingAuction: false,
   draftBidAmount: null,
   draftBidAuctionId: null,
@@ -136,6 +144,7 @@ async function loadSettings() {
   state.jerseySizes = Array.isArray(data.jersey_sizes) && data.jersey_sizes.length
     ? data.jersey_sizes
     : ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+  if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
   fillSettingsForm();
 }
 
@@ -162,10 +171,17 @@ function renderJerseyOrders() {
     countEl.textContent = orders.length === 1 ? '1 order' : `${orders.length} orders`;
   }
   if (!orders.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">No jersey orders yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="muted">No jersey orders yet.</td></tr>`;
     return;
   }
-  tbody.innerHTML = orders.map(o => `
+  const customDefs = ((state.jerseyFormFields || {}).custom) || [];
+  const labelById = Object.fromEntries(customDefs.map(c => [c.id, c.label]));
+  tbody.innerHTML = orders.map(o => {
+    const extras = o.extra_fields || {};
+    const extraText = Object.keys(extras).length
+      ? Object.entries(extras).map(([id, val]) => `${labelById[id] || id}: ${val}`).join(' · ')
+      : '—';
+    return `
     <tr>
       <td>${escapeHtml(formatJerseyWhen(o.created_at))}</td>
       <td>
@@ -177,11 +193,12 @@ function renderJerseyOrders() {
       <td>${escapeHtml(o.player_name || '—')}</td>
       <td>${escapeHtml(o.jersey_number || '—')}</td>
       <td><strong>${escapeHtml(o.size || '—')}</strong></td>
+      <td class="muted">${escapeHtml(extraText)}</td>
       <td>
         <button class="btn btn-sm btn-danger" type="button" onclick="deleteJerseyOrder(${o.id})">Delete</button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function exportJerseyOrdersCsv() {
@@ -216,6 +233,199 @@ function fillSettingsForm() {
   renderJerseySizeChartPreview();
   const sizesInput = document.getElementById('jerseySizesInput');
   if (sizesInput) sizesInput.value = (state.jerseySizes || []).join('\n');
+  fillJerseyFormFieldsConfig();
+}
+
+function fillJerseyFormFieldsConfig() {
+  const fields = state.jerseyFormFields || {};
+  const customById = Object.fromEntries((fields.custom || []).map(c => [c.id, c]));
+  const defaultOrder = ['team', 'player_name', 'jersey_number', 'size']
+    .concat((fields.custom || []).map(c => `custom:${c.id}`));
+  const order = Array.isArray(fields.order) && fields.order.length ? fields.order.slice() : defaultOrder;
+  defaultOrder.forEach(key => {
+    if (!order.includes(key)) order.push(key);
+  });
+
+  const builtinMeta = {
+    team: { label: 'Team', locked: true },
+    player_name: { label: 'Player name', locked: false },
+    jersey_number: { label: 'Number', locked: false },
+    size: { label: 'Size', locked: false },
+  };
+
+  const wrap = document.getElementById('jerseyFieldsSortable');
+  if (!wrap) return;
+
+  const rows = order.map((key, index) => {
+    if (key.startsWith('custom:')) {
+      const id = key.slice(7);
+      const field = customById[id] || { id, label: 'Custom field', enabled: true, required: false };
+      return `
+        <div class="jersey-fields-config-row jersey-fields-config-sortable" data-field-key="${escapeHtml(key)}" data-sort-index="${index}">
+          <span class="jersey-field-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+          <input type="text" class="jersey-custom-label-input" value="${escapeHtml(field.label || '')}" placeholder="Field label" aria-label="Custom field label" data-custom-id="${escapeHtml(field.id || id)}">
+          <label><input type="checkbox" class="jersey-field-enabled" ${field.enabled !== false ? 'checked' : ''}></label>
+          <label><input type="checkbox" class="jersey-field-required" ${field.required ? 'checked' : ''} ${field.enabled === false ? 'disabled' : ''}></label>
+          <button type="button" class="btn btn-sm btn-danger" data-remove-custom="${escapeHtml(field.id || id)}">Remove</button>
+        </div>`;
+    }
+    const meta = builtinMeta[key] || { label: key, locked: false };
+    const cfg = fields[key] || { enabled: true, required: false };
+    const enabledChecked = key === 'team' || cfg.enabled !== false;
+    const requiredChecked = key === 'team' || (!!cfg.required && cfg.enabled !== false);
+    return `
+      <div class="jersey-fields-config-row jersey-fields-config-sortable" data-field-key="${escapeHtml(key)}" data-sort-index="${index}">
+        <span class="jersey-field-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+        <span>${escapeHtml(meta.label)}</span>
+        <label><input type="checkbox" class="jersey-field-enabled" data-builtin-key="${escapeHtml(key)}" ${enabledChecked ? 'checked' : ''} ${meta.locked ? 'disabled' : ''}></label>
+        <label><input type="checkbox" class="jersey-field-required" data-builtin-key="${escapeHtml(key)}" ${requiredChecked ? 'checked' : ''} ${meta.locked || cfg.enabled === false ? 'disabled' : ''}></label>
+        <span></span>
+      </div>`;
+  }).join('');
+
+  wrap.innerHTML = rows;
+  wireJerseyFieldRowControls(wrap);
+  wireJerseyFieldsDrag(wrap);
+}
+
+function wireJerseyFieldRowControls(wrap) {
+  wrap.querySelectorAll('.jersey-fields-config-sortable').forEach(row => {
+    const enabledEl = row.querySelector('.jersey-field-enabled');
+    const requiredEl = row.querySelector('.jersey-field-required');
+    if (enabledEl && requiredEl && !enabledEl.disabled) {
+      enabledEl.addEventListener('change', () => {
+        if (!enabledEl.checked) requiredEl.checked = false;
+        requiredEl.disabled = !enabledEl.checked;
+      });
+    }
+    const removeBtn = row.querySelector('[data-remove-custom]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        removeJerseyCustomField(removeBtn.getAttribute('data-remove-custom'));
+      });
+    }
+  });
+}
+
+function wireJerseyFieldsDrag(wrap) {
+  let dragEl = null;
+  wrap.querySelectorAll('.jersey-fields-config-sortable').forEach(row => {
+    row.draggable = false;
+    const handle = row.querySelector('.jersey-field-drag');
+    if (handle) {
+      handle.addEventListener('mousedown', () => { row.draggable = true; });
+      handle.addEventListener('mouseup', () => { row.draggable = false; });
+    }
+    row.addEventListener('dragstart', (e) => {
+      if (!row.draggable) {
+        e.preventDefault();
+        return;
+      }
+      dragEl = row;
+      row.classList.add('is-dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', row.dataset.fieldKey || '');
+      }
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('is-dragging');
+      row.draggable = false;
+      wrap.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      dragEl = null;
+      state.jerseyFormFields = readJerseyFormFieldsFromDom();
+    });
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const target = e.currentTarget;
+      if (!dragEl || target === dragEl) return;
+      target.classList.add('drag-over');
+      const children = [...wrap.querySelectorAll('.jersey-fields-config-sortable')];
+      const dragIndex = children.indexOf(dragEl);
+      const targetIndex = children.indexOf(target);
+      if (dragIndex < targetIndex) wrap.insertBefore(dragEl, target.nextSibling);
+      else wrap.insertBefore(dragEl, target);
+    });
+    row.addEventListener('dragleave', (e) => {
+      e.currentTarget.classList.remove('drag-over');
+    });
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+    });
+  });
+}
+
+function addJerseyCustomField() {
+  const fields = readJerseyFormFieldsFromDom();
+  const id = `field_${Date.now().toString(36)}`;
+  fields.custom.push({
+    id,
+    label: 'New field',
+    enabled: true,
+    required: false,
+  });
+  if (!Array.isArray(fields.order)) fields.order = [];
+  fields.order.push(`custom:${id}`);
+  state.jerseyFormFields = fields;
+  fillJerseyFormFieldsConfig();
+  const inputs = document.querySelectorAll('#jerseyFieldsSortable .jersey-custom-label-input');
+  const last = inputs[inputs.length - 1];
+  if (last) {
+    last.focus();
+    last.select();
+  }
+}
+
+function removeJerseyCustomField(fieldId) {
+  const fields = readJerseyFormFieldsFromDom();
+  fields.custom = (fields.custom || []).filter(c => c.id !== fieldId);
+  fields.order = (fields.order || []).filter(key => key !== `custom:${fieldId}`);
+  state.jerseyFormFields = fields;
+  fillJerseyFormFieldsConfig();
+}
+
+function readJerseyFormFieldsFromDom() {
+  const builtin = {
+    team: { enabled: true, required: true },
+    player_name: { enabled: true, required: false },
+    jersey_number: { enabled: true, required: false },
+    size: { enabled: true, required: true },
+  };
+  const custom = [];
+  const order = [];
+
+  document.querySelectorAll('#jerseyFieldsSortable .jersey-fields-config-sortable').forEach(row => {
+    const key = row.dataset.fieldKey || '';
+    if (!key) return;
+    order.push(key);
+    if (key.startsWith('custom:')) {
+      const labelEl = row.querySelector('.jersey-custom-label-input');
+      const enabledEl = row.querySelector('.jersey-field-enabled');
+      const requiredEl = row.querySelector('.jersey-field-required');
+      const label = (labelEl && labelEl.value || '').trim();
+      if (!label) return;
+      const enabled = enabledEl ? !!enabledEl.checked : true;
+      custom.push({
+        id: (labelEl && labelEl.dataset.customId) || key.slice(7),
+        label,
+        enabled,
+        required: enabled && requiredEl ? !!requiredEl.checked : false,
+      });
+      return;
+    }
+    const enabledEl = row.querySelector('.jersey-field-enabled');
+    const requiredEl = row.querySelector('.jersey-field-required');
+    const enabled = key === 'team' ? true : (enabledEl ? !!enabledEl.checked : true);
+    const required = key === 'team' ? true : (enabled && requiredEl ? !!requiredEl.checked : false);
+    builtin[key] = { enabled, required };
+  });
+
+  return {
+    ...builtin,
+    custom,
+    order,
+  };
 }
 
 function renderWaitingBgPreview() {
@@ -314,9 +524,37 @@ async function saveJerseySizes() {
     });
     state.jerseySizes = data.jersey_sizes || sizes;
     state.jerseySizeChartUrl = data.jersey_size_chart_url || state.jerseySizeChartUrl;
+    if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
     fillSettingsForm();
     if (status) status.textContent = `Saved ${state.jerseySizes.length} size(s).`;
     toast('Jersey sizes updated');
+  } catch (err) {
+    if (status) status.textContent = '';
+    toast(err.message, true);
+  }
+}
+
+async function saveJerseyFormFields() {
+  const status = document.getElementById('jerseyFieldsStatus');
+  const fields = readJerseyFormFieldsFromDom();
+  try {
+    const enabled = !!document.getElementById('timerEnabled').checked;
+    const minutes = parseInt(document.getElementById('timerMinutes').value, 10) || 0;
+    const seconds = parseInt(document.getElementById('timerSeconds').value, 10) || 0;
+    const total = Math.max(5, minutes * 60 + seconds);
+    const data = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auction_timer_seconds: total,
+        auction_timer_enabled: enabled,
+        jersey_form_fields: fields,
+      }),
+    });
+    if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
+    fillSettingsForm();
+    if (status) status.textContent = 'Field options saved.';
+    toast('Jersey field options updated');
   } catch (err) {
     if (status) status.textContent = '';
     toast(err.message, true);
@@ -488,6 +726,7 @@ function connectSSE() {
       state.waitingBackgroundUrl = data.waiting_background_url || '';
       state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
       if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
+      if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
       fillSettingsForm();
       if (state.currentAuction) await loadCurrentAuction();
       renderAll();

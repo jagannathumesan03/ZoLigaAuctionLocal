@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=jersey-csv-1">
+<link rel="stylesheet" href="/static/css/style.css?v=jersey-field-order-1">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="admin-page">
@@ -157,11 +157,12 @@
               <th>Name</th>
               <th>Number</th>
               <th>Size</th>
+              <th>Extra</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="jerseyOrdersList">
-            <tr><td colspan="6" class="muted">No jersey orders yet.</td></tr>
+            <tr><td colspan="7" class="muted">No jersey orders yet.</td></tr>
           </tbody>
         </table>
       </div>
@@ -223,7 +224,7 @@
 
       <div class="field settings-bg-block">
         <label>Jersey size chart</label>
-        <p class="muted settings-help">Shown on the viewer Jersey tab when no team is selected.</p>
+        <p class="muted settings-help">Shown on the public jersey page when no team is selected.</p>
         <div class="settings-bg-preview-wrap">
           <div class="settings-bg-preview settings-size-chart-preview" id="jerseySizeChartPreview" aria-hidden="true"></div>
           <p class="muted" id="jerseySizeChartEmpty">No size chart uploaded yet.</p>
@@ -239,11 +240,31 @@
 
       <div class="field settings-bg-block mt-16">
         <label for="jerseySizesInput">Jersey sizes</label>
-        <p class="muted settings-help">One size per line (or comma-separated). These options appear in the viewer size dropdown.</p>
+        <p class="muted settings-help">One size per line (or comma-separated). These options appear in the jersey size dropdown.</p>
         <textarea id="jerseySizesInput" rows="6" placeholder="XS&#10;S&#10;M&#10;L&#10;XL&#10;XXL&#10;3XL"></textarea>
         <div class="row mt-16">
           <button type="button" class="btn btn-primary btn-sm" onclick="saveJerseySizes()">Save sizes</button>
           <span class="muted" id="jerseySizesStatus" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div class="field settings-bg-block mt-16">
+        <label>Jersey order fields</label>
+        <p class="muted settings-help">Choose which fields appear on the public jersey page and which are required. Drag the handle to change order. Team is always required.</p>
+        <div class="jersey-fields-config">
+          <div class="jersey-fields-config-row jersey-fields-config-head">
+            <span></span>
+            <span>Field</span>
+            <span>Show</span>
+            <span>Required</span>
+            <span></span>
+          </div>
+          <div id="jerseyFieldsSortable"></div>
+        </div>
+        <div class="row mt-16 toolbar-actions">
+          <button type="button" class="btn btn-sm" onclick="addJerseyCustomField()">Add field</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveJerseyFormFields()">Save field options</button>
+          <span class="muted" id="jerseyFieldsStatus" aria-live="polite"></span>
         </div>
       </div>
     </div>
@@ -357,6 +378,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=jersey-shorts-1"></script>
+<script src="/static/js/admin.js?v=jersey-field-order-1"></script>
 </body>
 </html>

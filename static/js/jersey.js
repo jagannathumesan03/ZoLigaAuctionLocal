@@ -1,9 +1,18 @@
 const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+const DEFAULT_FIELDS = {
+  team: { enabled: true, required: true },
+  player_name: { enabled: true, required: false },
+  jersey_number: { enabled: true, required: false },
+  size: { enabled: true, required: true },
+  custom: [],
+  order: ['team', 'player_name', 'jersey_number', 'size'],
+};
 
 const state = {
   teams: [],
   jerseySizeChartUrl: '',
   jerseySizes: DEFAULT_SIZES.slice(),
+  jerseyFormFields: JSON.parse(JSON.stringify(DEFAULT_FIELDS)),
 };
 
 const jerseyUi = {
@@ -46,10 +55,110 @@ async function loadJerseySettings() {
     state.jerseySizes = Array.isArray(data.jersey_sizes) && data.jersey_sizes.length
       ? data.jersey_sizes
       : DEFAULT_SIZES.slice();
+    state.jerseyFormFields = data.jersey_form_fields || JSON.parse(JSON.stringify(DEFAULT_FIELDS));
   } catch (e) {
     state.jerseySizeChartUrl = '';
     state.jerseySizes = DEFAULT_SIZES.slice();
+    state.jerseyFormFields = JSON.parse(JSON.stringify(DEFAULT_FIELDS));
   }
+}
+
+function fieldConfig(key) {
+  const fields = state.jerseyFormFields || DEFAULT_FIELDS;
+  return fields[key] || DEFAULT_FIELDS[key] || { enabled: true, required: false };
+}
+
+function customFieldDefs() {
+  const fields = state.jerseyFormFields || DEFAULT_FIELDS;
+  return Array.isArray(fields.custom) ? fields.custom : [];
+}
+
+function applyJerseyFormFields() {
+  const map = [
+    ['team', 'jerseyFieldTeam'],
+    ['player_name', 'jerseyFieldName'],
+    ['jersey_number', 'jerseyFieldNumber'],
+    ['size', 'jerseyFieldSize'],
+  ];
+  map.forEach(([key, wrapId]) => {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const cfg = fieldConfig(key);
+    wrap.style.display = cfg.enabled ? '' : 'none';
+    const input = wrap.querySelector('input, select');
+    if (input) {
+      if (cfg.required) input.setAttribute('aria-required', 'true');
+      else input.removeAttribute('aria-required');
+    }
+  });
+  renderCustomJerseyFields();
+  applyJerseyFieldOrder();
+}
+
+function fieldOrderList() {
+  const fields = state.jerseyFormFields || DEFAULT_FIELDS;
+  const customKeys = customFieldDefs().map(c => `custom:${c.id}`);
+  const fallback = ['team', 'player_name', 'jersey_number', 'size'].concat(customKeys);
+  const order = Array.isArray(fields.order) && fields.order.length ? fields.order.slice() : fallback.slice();
+  fallback.forEach(key => {
+    if (!order.includes(key)) order.push(key);
+  });
+  return order;
+}
+
+function applyJerseyFieldOrder() {
+  const order = fieldOrderList();
+  const submit = document.querySelector('.jersey-submit-field');
+  order.forEach((key, index) => {
+    let el = null;
+    if (key === 'team') el = document.getElementById('jerseyFieldTeam');
+    else if (key === 'player_name') el = document.getElementById('jerseyFieldName');
+    else if (key === 'jersey_number') el = document.getElementById('jerseyFieldNumber');
+    else if (key === 'size') el = document.getElementById('jerseyFieldSize');
+    else if (key.startsWith('custom:')) {
+      el = document.querySelector(`[data-custom-field-wrap="${key.slice(7)}"]`);
+    }
+    if (el) el.style.order = String(index);
+  });
+  if (submit) submit.style.order = String(order.length + 10);
+}
+
+function renderCustomJerseyFields() {
+  const wrap = document.getElementById('jerseyCustomFields');
+  if (!wrap) return;
+  const previous = {};
+  wrap.querySelectorAll('[data-custom-field-id]').forEach(input => {
+    previous[input.dataset.customFieldId] = input.value;
+  });
+  const defs = customFieldDefs().filter(f => f.enabled !== false);
+  if (!defs.length) {
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = defs.map(field => {
+    const value = previous[field.id] || '';
+    return `
+      <div class="field" data-custom-field-wrap="${escapeHtml(field.id)}">
+        <label for="jerseyCustom_${escapeHtml(field.id)}">${escapeHtml(field.label || field.id)}</label>
+        <input type="text" id="jerseyCustom_${escapeHtml(field.id)}" data-custom-field-id="${escapeHtml(field.id)}" value="${escapeHtml(value)}" autocomplete="off">
+      </div>`;
+  }).join('');
+}
+
+function collectCustomFieldValues() {
+  const values = {};
+  const errors = [];
+  customFieldDefs().forEach(field => {
+    if (field.enabled === false) return;
+    const input = document.getElementById(`jerseyCustom_${field.id}`);
+    const value = (input && input.value || '').trim();
+    if (field.required && !value) {
+      errors.push(`${field.label || field.id} is required.`);
+      return;
+    }
+    if (value) values[field.id] = value;
+  });
+  return { values, errors };
 }
 
 function setupJerseyForm() {
@@ -88,9 +197,12 @@ function openJerseyConfirm() {
   const numberInput = document.getElementById('jerseyNumber');
   const sizeInput = document.getElementById('jerseySize');
   const teamId = Number(jerseyUi.teamId || (select && select.value) || 0);
-  const playerName = (nameInput && nameInput.value || '').trim();
-  const jerseyNumber = (numberInput && numberInput.value || '').trim();
-  const size = (sizeInput && sizeInput.value || '').trim();
+  const nameCfg = fieldConfig('player_name');
+  const numberCfg = fieldConfig('jersey_number');
+  const sizeCfg = fieldConfig('size');
+  const playerName = nameCfg.enabled ? (nameInput && nameInput.value || '').trim() : '';
+  const jerseyNumber = numberCfg.enabled ? (numberInput && numberInput.value || '').trim() : '';
+  const size = sizeCfg.enabled ? (sizeInput && sizeInput.value || '').trim() : '';
 
   const setStatus = (msg, isError = false) => {
     if (!statusEl) return;
@@ -99,19 +211,47 @@ function openJerseyConfirm() {
   };
 
   if (!teamId) { setStatus('Select a team first.', true); return; }
-  if (!size) { setStatus('Choose a jersey size.', true); return; }
+  if (nameCfg.enabled && nameCfg.required && !playerName) {
+    setStatus('Enter the name for the jersey.', true); return;
+  }
+  if (numberCfg.enabled && numberCfg.required && !jerseyNumber) {
+    setStatus('Enter a jersey number.', true); return;
+  }
+  if (sizeCfg.enabled && sizeCfg.required && !size) {
+    setStatus('Choose a jersey size.', true); return;
+  }
+  const custom = collectCustomFieldValues();
+  if (custom.errors.length) {
+    setStatus(custom.errors[0], true); return;
+  }
 
   const team = state.teams.find(t => String(t.id) === String(teamId));
   const teamName = team ? team.name : 'Selected team';
-  pendingOrder = { team_id: teamId, player_name: playerName, jersey_number: jerseyNumber, size };
+  pendingOrder = {
+    team_id: teamId,
+    player_name: playerName,
+    jersey_number: jerseyNumber,
+    size,
+    extra_fields: custom.values,
+  };
 
   const summary = document.getElementById('jerseyConfirmSummary');
   if (summary) {
-    summary.innerHTML = `
-      <strong>${escapeHtml(teamName)}</strong><br>
-      Name: ${playerName ? escapeHtml(playerName) : '<em>none</em>'}<br>
-      Number: ${jerseyNumber ? escapeHtml(jerseyNumber) : '<em>none</em>'}<br>
-      Size: <strong>${escapeHtml(size)}</strong>`;
+    const lines = [`<strong>${escapeHtml(teamName)}</strong>`];
+    if (nameCfg.enabled) {
+      lines.push(`Name: ${playerName ? escapeHtml(playerName) : '<em>none</em>'}`);
+    }
+    if (numberCfg.enabled) {
+      lines.push(`Number: ${jerseyNumber ? escapeHtml(jerseyNumber) : '<em>none</em>'}`);
+    }
+    if (sizeCfg.enabled) {
+      lines.push(`Size: ${size ? `<strong>${escapeHtml(size)}</strong>` : '<em>none</em>'}`);
+    }
+    customFieldDefs().filter(f => f.enabled !== false).forEach(field => {
+      const value = custom.values[field.id] || '';
+      lines.push(`${escapeHtml(field.label || field.id)}: ${value ? escapeHtml(value) : '<em>none</em>'}`);
+    });
+    summary.innerHTML = lines.join('<br>');
   }
   const overlay = document.getElementById('jerseyConfirmOverlay');
   if (overlay) overlay.style.display = 'flex';
@@ -147,12 +287,15 @@ async function confirmAndSubmitJerseyOrder() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     });
+    const extras = order.extra_fields || {};
+    const extraLabel = Object.values(extras).filter(Boolean).join(' · ');
     const label = [
       order.player_name || null,
       order.jersey_number ? `#${order.jersey_number}` : null,
-      order.size,
+      order.size || null,
+      extraLabel || null,
     ].filter(Boolean).join(' · ');
-    setStatus(`Order saved: ${label}`);
+    setStatus(label ? `Order saved: ${label}` : 'Order saved.');
   } catch (err) {
     setStatus(err.message || 'Could not save jersey order', true);
   } finally {
@@ -165,6 +308,7 @@ function renderJerseyPage() {
   const select = document.getElementById('jerseyTeamSelect');
   if (!select) return;
 
+  applyJerseyFormFields();
   fillJerseySizeOptions();
 
   const signature = state.teams.map(t =>

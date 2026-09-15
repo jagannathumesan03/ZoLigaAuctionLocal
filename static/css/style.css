@@ -465,6 +465,13 @@ label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; display: 
 .login-box .sub { text-align: center; color: var(--text-dim); margin-bottom: 24px; font-size: 0.85rem; }
 .role-toggle { display: flex; gap: 8px; margin-bottom: 20px; }
 .role-toggle .btn { flex: 1; }
+.role-toggle a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
 .role-toggle .btn.active { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
 .error-msg { color: var(--danger); font-size: 0.82rem; margin-top: 10px; min-height: 1.2em; }
 
@@ -1695,6 +1702,66 @@ h1, h2, h3 { letter-spacing: 0; }
 .jersey-confirm-modal #jerseyConfirmSummary {
   margin: 12px 0 0;
   line-height: 1.6;
+}
+.jersey-fields-config {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+  margin-top: 10px;
+}
+.jersey-fields-config-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 64px 72px 88px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(6, 15, 23, 0.35);
+}
+#jerseyFieldsSortable {
+  display: grid;
+  gap: 8px;
+}
+.jersey-field-drag {
+  cursor: grab;
+  user-select: none;
+  color: var(--text-dim);
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+.jersey-fields-config-sortable.is-dragging {
+  opacity: 0.55;
+}
+.jersey-fields-config-sortable.drag-over {
+  border-color: var(--accent-2, #3d8bfd);
+}
+.jersey-custom-label-input {
+  width: 100%;
+  min-width: 0;
+}
+.jersey-custom-fields {
+  display: contents;
+}
+.jersey-fields-config-head {
+  border: none;
+  background: transparent;
+  padding: 0 10px 4px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.jersey-fields-config-row label {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+.jersey-fields-config-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
 }
 .jersey-controls {
   display: grid;

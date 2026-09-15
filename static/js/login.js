@@ -8,10 +8,6 @@ function switchRole(role) {
   document.getElementById('errorMsg').textContent = '';
 }
 
-function goToJersey() {
-  window.location.href = '/jersey';
-}
-
 document.getElementById('adminForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const username = document.getElementById('adminUsername').value;

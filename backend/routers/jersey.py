@@ -1,8 +1,10 @@
 import csv
 import io
+import json
 from datetime import datetime, timezone
+from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import Response
@@ -10,7 +12,7 @@ from fastapi.responses import Response
 from backend.database import db_cursor, rows_to_list
 from backend.auth import require_admin
 from backend.sse import broadcaster
-from backend.routers.settings import get_jersey_sizes
+from backend.routers.settings import get_jersey_sizes, get_jersey_form_fields
 
 router = APIRouter(prefix="/api/jersey-orders", tags=["jersey"])
 
@@ -19,7 +21,28 @@ class JerseyOrderBody(BaseModel):
     team_id: int
     player_name: str = ""
     jersey_number: str = ""
-    size: str = Field(min_length=1)
+    size: str = ""
+    extra_fields: Optional[dict] = None
+
+
+def _parse_extra_fields(raw) -> dict:
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return {str(k): "" if v is None else str(v) for k, v in data.items()}
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return {}
+
+
+def _enrich_order(row) -> dict:
+    order = dict(row)
+    order["extra_fields"] = _parse_extra_fields(order.get("extra_fields"))
+    return order
 
 
 def _order_row(cur, order_id: int):
@@ -33,7 +56,7 @@ def _order_row(cur, order_id: int):
         (order_id,),
     )
     row = cur.fetchone()
-    return dict(row) if row else None
+    return _enrich_order(row) if row else None
 
 
 def _canonical_size(allowed: list[str], raw: str):
@@ -55,7 +78,7 @@ def _list_orders(cur):
         ORDER BY o.created_at DESC, o.id DESC
         """
     )
-    return rows_to_list(cur.fetchall())
+    return [_enrich_order(r) for r in cur.fetchall()]
 
 
 @router.get("")
@@ -68,18 +91,36 @@ def list_jersey_orders(request: Request, _=Depends(require_admin)):
 def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
     with db_cursor() as cur:
         orders = _list_orders(cur)
+        fields = get_jersey_form_fields(cur)
+
+    custom_defs = fields.get("custom") or []
+    custom_ids = [c["id"] for c in custom_defs]
+    # Include any leftover keys from saved orders so history isn't lost.
+    seen = set(custom_ids)
+    for o in orders:
+        for key in (o.get("extra_fields") or {}):
+            if key not in seen:
+                custom_ids.append(key)
+                seen.add(key)
+    label_by_id = {c["id"]: c["label"] for c in custom_defs}
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["when", "team", "name", "number", "size"])
+    header = ["when", "team", "name", "number", "size"] + [
+        label_by_id.get(cid, cid) for cid in custom_ids
+    ]
+    writer.writerow(header)
     for o in orders:
-        writer.writerow([
+        extras = o.get("extra_fields") or {}
+        row = [
             o.get("created_at") or "",
             o.get("team_name") or "",
             o.get("player_name") or "",
             o.get("jersey_number") or "",
             o.get("size") or "",
-        ])
+        ]
+        row.extend(extras.get(cid, "") for cid in custom_ids)
+        writer.writerow(row)
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     return Response(
@@ -94,9 +135,6 @@ def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
 @router.post("")
 async def create_jersey_order(body: JerseyOrderBody, request: Request):
     """Public — anyone can submit a jersey order from /jersey (no login)."""
-    name = (body.player_name or "").strip()
-    number = (body.jersey_number or "").strip()
-
     submitted_by = (
         request.session.get("username")
         or request.session.get("role")
@@ -104,19 +142,57 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
     )
 
     with db_cursor() as cur:
-        allowed = get_jersey_sizes(cur)
-        size = _canonical_size(allowed, body.size)
-        if not size:
-            raise HTTPException(status_code=400, detail="Choose a valid jersey size")
+        fields = get_jersey_form_fields(cur)
+        name = (body.player_name or "").strip()
+        number = (body.jersey_number or "").strip()
+        raw_size = (body.size or "").strip()
+        incoming_extra = body.extra_fields if isinstance(body.extra_fields, dict) else {}
+
+        if not fields["player_name"]["enabled"]:
+            name = ""
+        elif fields["player_name"]["required"] and not name:
+            raise HTTPException(status_code=400, detail="Player name is required")
+
+        if not fields["jersey_number"]["enabled"]:
+            number = ""
+        elif fields["jersey_number"]["required"] and not number:
+            raise HTTPException(status_code=400, detail="Jersey number is required")
+
+        size = ""
+        if fields["size"]["enabled"]:
+            if fields["size"]["required"] and not raw_size:
+                raise HTTPException(status_code=400, detail="Choose a jersey size")
+            if raw_size:
+                allowed = get_jersey_sizes(cur)
+                size = _canonical_size(allowed, raw_size)
+                if not size:
+                    raise HTTPException(status_code=400, detail="Choose a valid jersey size")
+
+        if not body.team_id:
+            raise HTTPException(status_code=400, detail="Select a team first")
+
+        extra = {}
+        for custom in fields.get("custom") or []:
+            if not custom.get("enabled"):
+                continue
+            field_id = custom["id"]
+            label = custom.get("label") or field_id
+            value = str(incoming_extra.get(field_id, "") or "").strip()
+            if custom.get("required") and not value:
+                raise HTTPException(status_code=400, detail=f"{label} is required")
+            if value:
+                extra[field_id] = value
+
         cur.execute("SELECT id FROM teams WHERE id = ?", (body.team_id,))
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Team not found")
         cur.execute(
             """
-            INSERT INTO jersey_orders (team_id, player_name, jersey_number, size, submitted_by)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO jersey_orders
+              (team_id, player_name, jersey_number, size, extra_fields, submitted_by)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (body.team_id, name, number, size, submitted_by),
+            (body.team_id, name, number, size, json.dumps(extra), submitted_by),
         )
         order = _order_row(cur, cur.lastrowid)
 

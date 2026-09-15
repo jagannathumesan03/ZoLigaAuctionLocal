@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS jersey_orders (
     player_name TEXT NOT NULL,
     jersey_number TEXT NOT NULL DEFAULT '',
     size TEXT NOT NULL DEFAULT '',
+    extra_fields TEXT NOT NULL DEFAULT '{}',
     submitted_by TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (team_id) REFERENCES teams(id)
@@ -200,6 +201,11 @@ def _migrate(cur):
         cur.execute("ALTER TABLE teams ADD COLUMN jersey_back_url TEXT DEFAULT ''")
     if "shorts_url" not in team_cols:
         cur.execute("ALTER TABLE teams ADD COLUMN shorts_url TEXT DEFAULT ''")
+
+    cur.execute("PRAGMA table_info(jersey_orders)")
+    jersey_order_cols = {row[1] for row in cur.fetchall()}
+    if jersey_order_cols and "extra_fields" not in jersey_order_cols:
+        cur.execute("ALTER TABLE jersey_orders ADD COLUMN extra_fields TEXT NOT NULL DEFAULT '{}'")
 
     cur.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
