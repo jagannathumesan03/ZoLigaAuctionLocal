@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=stars-filter-1">
+<link rel="stylesheet" href="/static/css/style.css?v=jersey-csv-1">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="admin-page">
@@ -33,6 +33,7 @@
     <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="auction">Live auction</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="players">Player pool</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="teams">Teams</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab="jerseys">Jerseys</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab="settings">Settings</button>
   </nav>
 
@@ -136,6 +137,37 @@
     </div>
   </section>
 
+  <!-- ===================== JERSEYS TAB ===================== -->
+  <section class="tab-content" id="tab-jerseys" role="tabpanel">
+    <div class="panel">
+      <div class="panel-heading list-heading">
+        <div><p class="eyebrow">Kit orders</p><h1>Jersey requests</h1></div>
+        <div class="toolbar-actions">
+          <span class="muted" id="jerseyOrderCount">0 orders</span>
+          <button class="btn btn-sm" type="button" onclick="exportJerseyOrdersCsv()">Download CSV</button>
+        </div>
+      </div>
+      <p class="muted mt-8">Names, numbers, and sizes submitted from the public Jersey order page.</p>
+      <div class="jersey-orders-wrap mt-16">
+        <table class="jersey-orders-table" aria-label="Jersey orders">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Team</th>
+              <th>Name</th>
+              <th>Number</th>
+              <th>Size</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="jerseyOrdersList">
+            <tr><td colspan="6" class="muted">No jersey orders yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ===================== SETTINGS TAB ===================== -->
   <section class="tab-content" id="tab-settings" role="tabpanel">
     <div class="panel">
@@ -184,6 +216,34 @@
             <input type="file" accept="image/*" id="waitingBgInput" style="display:none" onchange="uploadWaitingBackground(event)">
           </label>
           <button type="button" class="btn btn-sm btn-warn" id="waitingBgClearBtn" style="display:none;" onclick="clearWaitingBackground()">Remove photo</button>
+        </div>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="field settings-bg-block">
+        <label>Jersey size chart</label>
+        <p class="muted settings-help">Shown on the viewer Jersey tab when no team is selected.</p>
+        <div class="settings-bg-preview-wrap">
+          <div class="settings-bg-preview settings-size-chart-preview" id="jerseySizeChartPreview" aria-hidden="true"></div>
+          <p class="muted" id="jerseySizeChartEmpty">No size chart uploaded yet.</p>
+        </div>
+        <div class="row mt-16 toolbar-actions">
+          <label class="btn btn-sm upload-button">
+            Upload size chart
+            <input type="file" accept="image/*" id="jerseySizeChartInput" style="display:none" onchange="uploadJerseySizeChart(event)">
+          </label>
+          <button type="button" class="btn btn-sm btn-warn" id="jerseySizeChartClearBtn" style="display:none;" onclick="clearJerseySizeChart()">Remove chart</button>
+        </div>
+      </div>
+
+      <div class="field settings-bg-block mt-16">
+        <label for="jerseySizesInput">Jersey sizes</label>
+        <p class="muted settings-help">One size per line (or comma-separated). These options appear in the viewer size dropdown.</p>
+        <textarea id="jerseySizesInput" rows="6" placeholder="XS&#10;S&#10;M&#10;L&#10;XL&#10;XXL&#10;3XL"></textarea>
+        <div class="row mt-16">
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveJerseySizes()">Save sizes</button>
+          <span class="muted" id="jerseySizesStatus" aria-live="polite"></span>
         </div>
       </div>
     </div>
@@ -253,6 +313,10 @@
         <div class="field"><label>Max Slots</label><input type="number" id="teamSlots" min="1" value="8" required></div>
       </div>
       <div class="field"><label>Logo</label><input type="file" id="teamLogo" accept="image/*"></div>
+      <div class="row">
+        <div class="field"><label>Jersey front</label><input type="file" id="teamJerseyFront" accept="image/*"></div>
+        <div class="field"><label>Jersey back</label><input type="file" id="teamJerseyBack" accept="image/*"></div>
+      </div>
       <div class="field">
         <label>Team login password</label>
         <input type="password" id="teamOwnerPassword" autocomplete="new-password" placeholder="Leave blank to keep current">
@@ -292,6 +356,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=stars-filter-1"></script>
+<script src="/static/js/admin.js?v=jersey-csv-1"></script>
 </body>
 </html>

@@ -543,7 +543,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .container { max-width: 1360px; padding: 30px 28px 48px; }
-.viewer-shell, .admin-shell { animation: page-enter 360ms ease-out both; }
+.viewer-shell, .admin-shell, .jersey-shell { animation: page-enter 360ms ease-out both; }
 
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(8px); }
@@ -956,6 +956,11 @@ h1, h2, h3 { letter-spacing: 0; }
 .settings-bg-preview.has-image {
   border-style: solid;
   border-color: rgba(78, 103, 177, 0.45);
+}
+.settings-size-chart-preview {
+  min-height: 220px;
+  background-size: contain;
+  background-repeat: no-repeat;
 }
 
 /* Sold / unsold transitional state -- fills the hero slot for a few seconds
@@ -1680,6 +1685,163 @@ h1, h2, h3 { letter-spacing: 0; }
   .spotlight-bid-panel { max-height: none; }
   .viewer-page .grid-teams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .team-view-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Jersey kit preview (viewer) ---------- */
+.jersey-panel { margin-top: 0; }
+.jersey-page .jersey-shell { max-width: 960px; }
+.jersey-page .jersey-panel { margin-top: 8px; }
+.jersey-controls {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.1fr) minmax(140px, 1fr) minmax(90px, 0.45fr) minmax(100px, 0.5fr) auto;
+  gap: 12px;
+  margin: 8px 0 10px;
+  align-items: end;
+}
+.jersey-submit-field .btn { min-width: 130px; }
+.jersey-submit-hint { margin: 0 0 16px; min-height: 1.2em; }
+.jersey-submit-hint.is-error { color: #ff7b86; }
+
+.jersey-orders-wrap { overflow-x: auto; }
+.jersey-orders-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+.jersey-orders-table th,
+.jersey-orders-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(79, 103, 165, 0.28);
+  vertical-align: middle;
+}
+.jersey-orders-table th {
+  color: #a8bad8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.jersey-order-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.jersey-order-team img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0a1428;
+}
+.jersey-controls .field { margin: 0; }
+.jersey-controls label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.jersey-empty { padding: 28px 8px; text-align: center; }
+.jersey-size-chart {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+.jersey-size-chart img {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid rgba(79, 103, 165, 0.35);
+  background: #0a1428;
+}
+.jersey-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+.jersey-side-label {
+  margin: 0 0 8px;
+  color: #a8bad8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+.jersey-image-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(79, 103, 165, 0.35);
+  background: #0a1428;
+  aspect-ratio: 3 / 4;
+}
+.jersey-image-wrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+.jersey-back-print {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.jersey-name-arch {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 62%;
+  height: auto;
+  transform: translateX(-50%);
+  overflow: visible;
+}
+.jersey-name-arch-text {
+  fill: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+}
+.jersey-overlay {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.jersey-overlay-number {
+  top: 36%;
+  font-size: clamp(3.4rem, 14vw, 5.6rem);
+  line-height: 0.9;
+  color: #fff;
+  -webkit-text-stroke: 4px #c62828;
+  paint-order: stroke fill;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  font-family: Impact, Haettenschweiler, "Arial Black", sans-serif;
+}
+
+@media (max-width: 760px) {
+  .jersey-controls { grid-template-columns: 1fr; }
 }
 
 /* ---------- Sale celebration ---------- */

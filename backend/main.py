@@ -9,7 +9,7 @@ import asyncio
 
 from backend.database import init_db
 from backend.sse import event_stream
-from backend.routers import auth_routes, players, teams, auction, settings
+from backend.routers import auth_routes, players, teams, auction, settings, jersey
 from backend.routers.auction import auction_timer_loop
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -28,6 +28,7 @@ app.include_router(players.router)
 app.include_router(teams.router)
 app.include_router(auction.router)
 app.include_router(settings.router)
+app.include_router(jersey.router)
 
 
 @app.on_event("startup")
@@ -71,3 +72,8 @@ def admin_page():
 @app.get("/viewer")
 def viewer_page():
     return FileResponse(os.path.join(TEMPLATES_DIR, "viewer.html"))
+
+
+@app.get("/jersey")
+def jersey_page():
+    return FileResponse(os.path.join(TEMPLATES_DIR, "jersey.html"))

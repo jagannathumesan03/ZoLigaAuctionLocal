@@ -4,11 +4,14 @@ let state = {
   auctionTimerSeconds: 120,
   auctionTimerEnabled: true,
   waitingBackgroundUrl: '',
+  jerseySizeChartUrl: '',
+  jerseySizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
   startingAuction: false,
   draftBidAmount: null,
   draftBidAuctionId: null,
   draftBidFloor: null,
   selectedPlayerIds: new Set(),
+  jerseyOrders: [],
 };
 
 // Tracks whether we've finished the first paint so a mid-session player
@@ -70,7 +73,7 @@ async function apiFetch(url, options = {}) {
 
 // ---------- Init / data load ----------
 async function init() {
-  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction(), loadSettings()]);
+  await Promise.all([loadPlayers(), loadTeams(), loadCurrentAuction(), loadSettings(), loadJerseyOrders()]);
   state.lastAuctionPlayerId = state.currentAuction ? state.currentAuction.id : null;
   auctionBaselineReady = true;
   renderAll();
@@ -119,7 +122,70 @@ async function loadSettings() {
   state.auctionTimerSeconds = data.auction_timer_seconds || 120;
   state.auctionTimerEnabled = data.auction_timer_enabled !== false;
   state.waitingBackgroundUrl = data.waiting_background_url || '';
+  state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
+  state.jerseySizes = Array.isArray(data.jersey_sizes) && data.jersey_sizes.length
+    ? data.jersey_sizes
+    : ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
   fillSettingsForm();
+}
+
+async function loadJerseyOrders() {
+  state.jerseyOrders = await apiFetch('/api/jersey-orders');
+}
+
+function formatJerseyWhen(value) {
+  if (!value) return '—';
+  const raw = String(value).includes('T') || String(value).includes('Z')
+    ? value
+    : String(value).replace(' ', 'T') + 'Z';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString();
+}
+
+function renderJerseyOrders() {
+  const tbody = document.getElementById('jerseyOrdersList');
+  const countEl = document.getElementById('jerseyOrderCount');
+  if (!tbody) return;
+  const orders = state.jerseyOrders || [];
+  if (countEl) {
+    countEl.textContent = orders.length === 1 ? '1 order' : `${orders.length} orders`;
+  }
+  if (!orders.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">No jersey orders yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = orders.map(o => `
+    <tr>
+      <td>${escapeHtml(formatJerseyWhen(o.created_at))}</td>
+      <td>
+        <span class="jersey-order-team">
+          <img src="${o.team_logo_url || placeholderImg()}" alt="">
+          ${escapeHtml(o.team_name || 'Team')}
+        </span>
+      </td>
+      <td>${escapeHtml(o.player_name || '')}</td>
+      <td>${escapeHtml(o.jersey_number || '—')}</td>
+      <td><strong>${escapeHtml(o.size || '—')}</strong></td>
+      <td>
+        <button class="btn btn-sm btn-danger" type="button" onclick="deleteJerseyOrder(${o.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function exportJerseyOrdersCsv() {
+  window.location.href = '/api/jersey-orders/export';
+}
+
+async function deleteJerseyOrder(id) {
+  if (!confirm('Delete this jersey order?')) return;
+  try {
+    await apiFetch(`/api/jersey-orders/${id}`, { method: 'DELETE' });
+    toast('Jersey order deleted');
+    await loadJerseyOrders();
+    renderJerseyOrders();
+  } catch (e) { toast(e.message, true); }
 }
 
 function fillSettingsForm() {
@@ -137,6 +203,9 @@ function fillSettingsForm() {
   if (minutesEl) minutesEl.disabled = !state.auctionTimerEnabled;
   if (secondsEl) secondsEl.disabled = !state.auctionTimerEnabled;
   renderWaitingBgPreview();
+  renderJerseySizeChartPreview();
+  const sizesInput = document.getElementById('jerseySizesInput');
+  if (sizesInput) sizesInput.value = (state.jerseySizes || []).join('\n');
 }
 
 function renderWaitingBgPreview() {
@@ -145,6 +214,25 @@ function renderWaitingBgPreview() {
   const clearBtn = document.getElementById('waitingBgClearBtn');
   if (!preview) return;
   const url = state.waitingBackgroundUrl;
+  if (url) {
+    preview.style.backgroundImage = `url("${url}")`;
+    preview.classList.add('has-image');
+    if (empty) empty.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = '';
+  } else {
+    preview.style.backgroundImage = '';
+    preview.classList.remove('has-image');
+    if (empty) empty.style.display = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+}
+
+function renderJerseySizeChartPreview() {
+  const preview = document.getElementById('jerseySizeChartPreview');
+  const empty = document.getElementById('jerseySizeChartEmpty');
+  const clearBtn = document.getElementById('jerseySizeChartClearBtn');
+  if (!preview) return;
+  const url = state.jerseySizeChartUrl;
   if (url) {
     preview.style.backgroundImage = `url("${url}")`;
     preview.classList.add('has-image');
@@ -177,6 +265,8 @@ async function submitSettingsForm(e) {
     state.auctionTimerSeconds = data.auction_timer_seconds;
     state.auctionTimerEnabled = data.auction_timer_enabled !== false;
     state.waitingBackgroundUrl = data.waiting_background_url || state.waitingBackgroundUrl;
+    state.jerseySizeChartUrl = data.jersey_size_chart_url || state.jerseySizeChartUrl;
+    if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
     fillSettingsForm();
     status.textContent = enabled
       ? 'Saved — timer applies to the next player put up for auction.'
@@ -185,6 +275,40 @@ async function submitSettingsForm(e) {
     renderAll();
   } catch (err) {
     status.textContent = '';
+    toast(err.message, true);
+  }
+}
+
+async function saveJerseySizes() {
+  const status = document.getElementById('jerseySizesStatus');
+  const raw = (document.getElementById('jerseySizesInput') || {}).value || '';
+  const sizes = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  if (!sizes.length) {
+    if (status) status.textContent = 'Add at least one size.';
+    toast('Add at least one jersey size', true);
+    return;
+  }
+  try {
+    const enabled = !!document.getElementById('timerEnabled').checked;
+    const minutes = parseInt(document.getElementById('timerMinutes').value, 10) || 0;
+    const seconds = parseInt(document.getElementById('timerSeconds').value, 10) || 0;
+    const total = Math.max(5, minutes * 60 + seconds);
+    const data = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auction_timer_seconds: total,
+        auction_timer_enabled: enabled,
+        jersey_sizes: sizes,
+      }),
+    });
+    state.jerseySizes = data.jersey_sizes || sizes;
+    state.jerseySizeChartUrl = data.jersey_size_chart_url || state.jerseySizeChartUrl;
+    fillSettingsForm();
+    if (status) status.textContent = `Saved ${state.jerseySizes.length} size(s).`;
+    toast('Jersey sizes updated');
+  } catch (err) {
+    if (status) status.textContent = '';
     toast(err.message, true);
   }
 }
@@ -224,6 +348,40 @@ async function clearWaitingBackground() {
   }
 }
 
+async function uploadJerseySizeChart(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const form = new FormData();
+  form.append('photo', file);
+  try {
+    const res = await fetch('/api/settings/jersey-size-chart', { method: 'POST', body: form });
+    if (!res.ok) {
+      let detail = 'Upload failed';
+      try { detail = (await res.json()).detail || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
+    if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
+    renderJerseySizeChartPreview();
+    toast('Jersey size chart updated');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function clearJerseySizeChart() {
+  try {
+    const data = await apiFetch('/api/settings/jersey-size-chart', { method: 'DELETE' });
+    state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
+    renderJerseySizeChartPreview();
+    toast('Jersey size chart removed');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
 function waitingSpotlightStyle() {
   const url = state.waitingBackgroundUrl;
   if (!url) return '';
@@ -236,6 +394,7 @@ function renderAll() {
   renderAuctionControls();
   renderPlayersList();
   renderTeamsList();
+  renderJerseyOrders();
 }
 
 // ---------- SSE ----------
@@ -276,6 +435,14 @@ function connectSSE() {
   es.addEventListener('team_updated', refresh);
   es.addEventListener('timer_paused', refresh);
   es.addEventListener('timer_resumed', refresh);
+  es.addEventListener('jersey_order_created', async () => {
+    await loadJerseyOrders();
+    renderJerseyOrders();
+  });
+  es.addEventListener('jersey_order_deleted', async () => {
+    await loadJerseyOrders();
+    renderJerseyOrders();
+  });
   es.addEventListener('auction_call', (e) => {
     try { setCallState(JSON.parse(e.data)); } catch (err) { /* ignore malformed payload */ }
   });
@@ -285,6 +452,8 @@ function connectSSE() {
       state.auctionTimerSeconds = data.auction_timer_seconds || state.auctionTimerSeconds;
       state.auctionTimerEnabled = data.auction_timer_enabled !== false;
       state.waitingBackgroundUrl = data.waiting_background_url || '';
+      state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
+      if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
       fillSettingsForm();
       if (state.currentAuction) await loadCurrentAuction();
       renderAll();
@@ -1211,6 +1380,10 @@ async function submitTeamForm(e) {
   if (ownerPassword) fd.append('owner_password', ownerPassword);
   const logo = document.getElementById('teamLogo').files[0];
   if (logo) fd.append('logo', logo);
+  const jerseyFront = document.getElementById('teamJerseyFront').files[0];
+  if (jerseyFront) fd.append('jersey_front', jerseyFront);
+  const jerseyBack = document.getElementById('teamJerseyBack').files[0];
+  if (jerseyBack) fd.append('jersey_back', jerseyBack);
 
   try {
     await apiFetch(id ? `/api/teams/${id}` : '/api/teams', {

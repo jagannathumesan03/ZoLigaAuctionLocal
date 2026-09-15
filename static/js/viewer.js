@@ -70,10 +70,14 @@ document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => activateTab(tab.dataset.tab));
 });
 
-async function apiFetch(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Request failed');
-  return res.json();
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    let detail = 'Request failed';
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(typeof detail === 'string' ? detail : 'Request failed');
+  }
+  return res.status === 204 ? null : res.json();
 }
 
 async function init() {

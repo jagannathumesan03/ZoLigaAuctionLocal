@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS teams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     logo_url TEXT DEFAULT '',
+    jersey_front_url TEXT DEFAULT '',
+    jersey_back_url TEXT DEFAULT '',
     purse_total INTEGER NOT NULL DEFAULT 0,
     purse_remaining INTEGER NOT NULL DEFAULT 0,
     slots_max INTEGER NOT NULL DEFAULT 8,
@@ -58,6 +60,17 @@ CREATE TABLE IF NOT EXISTS bid_history (
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jersey_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    jersey_number TEXT NOT NULL DEFAULT '',
+    size TEXT NOT NULL DEFAULT '',
+    submitted_by TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (team_id) REFERENCES teams(id)
 );
 """
 
@@ -180,6 +193,10 @@ def _migrate(cur):
     team_cols = {row[1] for row in cur.fetchall()}
     if "owner_password" not in team_cols:
         cur.execute("ALTER TABLE teams ADD COLUMN owner_password TEXT DEFAULT ''")
+    if "jersey_front_url" not in team_cols:
+        cur.execute("ALTER TABLE teams ADD COLUMN jersey_front_url TEXT DEFAULT ''")
+    if "jersey_back_url" not in team_cols:
+        cur.execute("ALTER TABLE teams ADD COLUMN jersey_back_url TEXT DEFAULT ''")
 
     cur.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",

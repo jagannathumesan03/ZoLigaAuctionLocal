@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jersey Order — Football Auction</title>
+<link rel="stylesheet" href="/static/css/style.css?v=jersey-public-1">
+<script src="/static/js/theme.js?v=theme-3"></script>
+</head>
+<body class="jersey-page">
+
+<header class="topbar">
+  <div class="brand"><span class="dot" aria-hidden="true"></span><span>Jersey Order</span></div>
+  <div class="topbar-actions">
+    <button class="btn btn-sm btn-quiet icon-btn theme-toggle" id="themeToggle" type="button" aria-label="Switch to light theme" title="Switch theme">
+      <svg class="icon-main" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="icon-alt" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
+    </button>
+    <a class="btn btn-sm btn-quiet" href="/login">Back to login</a>
+  </div>
+</header>
+
+<main class="container jersey-shell">
+  <div class="panel jersey-panel">
+    <div class="panel-heading">
+      <div><p class="eyebrow">Kit preview</p><h1>Jersey</h1></div>
+    </div>
+    <div class="jersey-controls">
+      <div class="field">
+        <label for="jerseyTeamSelect">Team</label>
+        <select id="jerseyTeamSelect" aria-label="Select team for jersey preview">
+          <option value="">Select a team…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="jerseyPlayerName">Player name</label>
+        <input type="text" id="jerseyPlayerName" placeholder="Name on jersey" autocomplete="off" aria-label="Player name on jersey">
+      </div>
+      <div class="field">
+        <label for="jerseyNumber">Number</label>
+        <input type="text" id="jerseyNumber" placeholder="e.g. 10" inputmode="numeric" autocomplete="off" aria-label="Jersey number">
+      </div>
+      <div class="field">
+        <label for="jerseySize">Size</label>
+        <select id="jerseySize" aria-label="Jersey size">
+          <option value="">Select size…</option>
+        </select>
+      </div>
+      <div class="field jersey-submit-field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" type="button" id="jerseySubmitBtn">Submit order</button>
+      </div>
+    </div>
+    <p class="muted jersey-submit-hint" id="jerseySubmitStatus" aria-live="polite"></p>
+    <div id="jerseyPreview" class="jersey-preview" aria-live="polite">
+      <p class="muted jersey-empty">Select a team to preview its jersey.</p>
+    </div>
+  </div>
+</main>
+
+<script src="/static/js/jersey.js?v=jersey-public-1"></script>
+</body>
+</html>
