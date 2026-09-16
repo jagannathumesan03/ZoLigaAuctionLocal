@@ -3,73 +3,181 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jersey Order — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=jersey-name-size-1">
-<script src="/static/js/theme.js?v=theme-3"></script>
+<title>Kit order — ZoLiga</title>
+<script>
+(function () {
+  try {
+    var key = 'zoliga-jersey-theme';
+    var saved = localStorage.getItem(key);
+    var theme = saved === 'light' || saved === 'dark'
+      ? saved
+      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/jersey-kit.css?v=kit-icons-3">
 </head>
-<body class="jersey-page">
+<body class="jersey-kit-page">
 
 <header class="topbar">
-  <div class="brand"><span class="dot" aria-hidden="true"></span><span>Jersey Order</span></div>
+  <div class="club">
+    <span class="mark">ZL</span>
+    <h1>ZoLiga</h1>
+    <span class="sub">Season kit order</span>
+  </div>
   <div class="topbar-actions">
-    <button class="btn btn-sm btn-quiet icon-btn theme-toggle" id="themeToggle" type="button" aria-label="Switch to light theme" title="Switch theme">
+    <button class="btn-quiet icon-btn theme-toggle" type="button" id="themeToggle" aria-label="Switch to dark theme" title="Switch theme">
       <svg class="icon-main" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
       <svg class="icon-alt" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>
     </button>
-    <a class="btn btn-sm btn-quiet" href="/login">Back to login</a>
+    <button class="btn-quiet icon-btn" type="button" id="sizeChartBtn" aria-label="Size chart" title="Size chart">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 7v2M12 12v2M16 17v2"/></svg>
+    </button>
+    <a class="btn-quiet icon-btn" href="/login" aria-label="Back to login" title="Back to login">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+    </a>
   </div>
 </header>
 
-<main class="container jersey-shell">
-  <div class="panel jersey-panel">
-    <div class="panel-heading">
-      <div><p class="eyebrow">Kit preview</p><h1>Jersey</h1></div>
-    </div>
-    <div class="jersey-controls">
-      <div class="field" id="jerseyFieldTeam">
-        <label for="jerseyTeamSelect">Team</label>
-        <select id="jerseyTeamSelect" aria-label="Select team for jersey preview">
-          <option value="">Select a team…</option>
-        </select>
-      </div>
-      <div class="field" id="jerseyFieldName">
-        <label for="jerseyPlayerName">Player name</label>
-        <input type="text" id="jerseyPlayerName" placeholder="Name on jersey" autocomplete="off" aria-label="Player name on jersey">
-      </div>
-      <div class="field" id="jerseyFieldNumber">
-        <label for="jerseyNumber">Number</label>
-        <input type="text" id="jerseyNumber" placeholder="e.g. 10" inputmode="numeric" autocomplete="off" aria-label="Jersey number">
-      </div>
-      <div class="field" id="jerseyFieldSize">
-        <label for="jerseySize">Size</label>
-        <select id="jerseySize" aria-label="Jersey size">
-          <option value="">Select size…</option>
-        </select>
-      </div>
-      <div id="jerseyCustomFields" class="jersey-custom-fields"></div>
-      <div class="field jersey-submit-field">
-        <label>&nbsp;</label>
-        <button class="btn btn-primary" type="button" id="jerseySubmitBtn">Submit order</button>
-      </div>
-    </div>
-    <p class="muted jersey-submit-hint" id="jerseySubmitStatus" aria-live="polite"></p>
-    <div id="jerseyPreview" class="jersey-preview" aria-live="polite">
-      <p class="muted jersey-empty">Select a team to preview its jersey.</p>
-    </div>
-  </div>
-</main>
+<div class="shell">
 
-<div class="modal-overlay" id="jerseyConfirmOverlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="jerseyConfirmTitle">
-  <div class="modal jersey-confirm-modal">
-    <h3 id="jerseyConfirmTitle">Confirm jersey order</h3>
-    <p class="muted" id="jerseyConfirmSummary"></p>
-    <div class="row mt-16">
-      <button type="button" class="btn" id="jerseyConfirmCancel">Cancel</button>
-      <button type="button" class="btn btn-primary" id="jerseyConfirmOk">Confirm &amp; submit</button>
+  <section class="stage" aria-label="Kit preview">
+    <p class="kit-name" id="kitName">Pick a team to see its kit</p>
+    <div class="stage-art" id="stageArt">
+      <div class="stage-empty" id="stageEmpty">Select a team to preview front, back, and shorts.</div>
+      <div class="stage-view" id="view-front" data-view="front"></div>
+      <div class="stage-view" id="view-back" data-view="back"></div>
+      <div class="stage-view" id="view-shorts" data-view="shorts"></div>
     </div>
+    <div class="tabs" role="tablist" aria-label="Kit views">
+      <button type="button" role="tab" aria-selected="true" data-view="front" id="tabFront">Front</button>
+      <button type="button" role="tab" aria-selected="false" data-view="back" id="tabBack">Back</button>
+      <button type="button" role="tab" aria-selected="false" data-view="shorts" id="tabShorts">Shorts</button>
+    </div>
+    <p class="stage-note" id="stageNote">Add a name and number to see them on the kit.</p>
+  </section>
+
+  <div>
+    <form id="orderForm" novalidate>
+
+      <section class="block" id="blockTeam">
+        <h2>Team</h2>
+        <p class="hint">Each team has its own kit. The preview updates when you choose.</p>
+        <div class="teams" id="teamPicker" role="radiogroup" aria-label="Team"></div>
+        <p class="err" id="errTeam">Choose a team.</p>
+      </section>
+
+      <section class="block" id="blockPrinting">
+        <div class="block-head">
+          <h2>Printing</h2>
+          <label class="toggle" for="wantPrint">
+            <input type="checkbox" id="wantPrint">
+            <span class="track" aria-hidden="true"></span>
+            Add printing
+          </label>
+        </div>
+        <p class="hint">Optional. Your name and squad number are printed on the back of the jersey.</p>
+        <div class="collapse" id="printFields">
+          <div class="row">
+            <div class="field" id="jerseyFieldName">
+              <label for="jerseyPlayerName">Name on jersey</label>
+              <input type="text" id="jerseyPlayerName" maxlength="16" autocomplete="off" placeholder="e.g. Sharma">
+              <p class="sub">Printed in capitals on the back.</p>
+            </div>
+            <div class="field" id="jerseyFieldNumber">
+              <label for="jerseyNumber">Squad number</label>
+              <input type="text" id="jerseyNumber" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="e.g. 7">
+              <p class="sub">0 to 99.</p>
+            </div>
+          </div>
+          <p class="err" id="errPrint">Enter the required printing details.</p>
+        </div>
+      </section>
+
+      <section class="block" id="blockSize">
+        <div class="block-head">
+          <h2>Jersey size</h2>
+          <button class="link-btn" type="button" id="sizeChartLink" data-chart="jersey">Size chart</button>
+        </div>
+        <p class="hint">Pick one size.</p>
+        <div class="sizes" id="sizeChips" role="radiogroup" aria-label="Jersey size"></div>
+        <p class="err" id="errSize">Choose a jersey size.</p>
+      </section>
+
+      <section class="block" id="blockShorts">
+        <div class="block-head">
+          <h2>Shorts</h2>
+          <label class="toggle" for="wantShorts">
+            <input type="checkbox" id="wantShorts">
+            <span class="track" aria-hidden="true"></span>
+            Add shorts
+          </label>
+        </div>
+        <p class="hint">Optional. Matching shorts with an elastic drawcord waist.</p>
+        <div class="collapse" id="shortsFields">
+          <div class="block-head" style="margin-bottom:8px">
+            <label style="margin:0">Shorts size</label>
+            <button class="link-btn" type="button" id="shortsSizeChartLink" data-chart="shorts">Size chart</button>
+          </div>
+          <div class="sizes" id="shortsSizeChips" role="radiogroup" aria-label="Shorts size"></div>
+          <p class="err" id="errShortsSize">Choose a shorts size.</p>
+        </div>
+      </section>
+
+      <section class="block" id="blockCustom" style="display:none;">
+        <h2>More details</h2>
+        <p class="hint">Extra information for your order.</p>
+        <div id="jerseyCustomFields"></div>
+        <p class="err" id="errCustom">Complete the required fields.</p>
+      </section>
+
+      <section class="summary">
+        <h2>Your order</h2>
+        <ul class="lines" id="orderLines"></ul>
+        <button class="place" type="submit" id="jerseySubmitBtn">Place order</button>
+        <p class="form-err" id="formErr">Check the highlighted fields above.</p>
+      </section>
+    </form>
+
+    <section class="done" id="done" aria-live="polite">
+      <h2>Order placed</h2>
+      <p class="hint" id="doneMsg">Your kit order has been saved.</p>
+      <dl id="doneList"></dl>
+      <button class="place secondary" type="button" id="again">Start another order</button>
+    </section>
   </div>
 </div>
 
-<script src="/static/js/jersey.js?v=jersey-name-size-1"></script>
+<dialog class="chart-dialog" id="chartDialog">
+  <div class="dlg-head">
+    <h2>Size chart</h2>
+    <button type="button" id="chartClose" aria-label="Close size chart">&times;</button>
+  </div>
+  <div class="dlg-body" id="chartBody">
+    <p class="foot">No size chart uploaded yet. Ask the organizer to add one in Admin → Settings.</p>
+  </div>
+</dialog>
+
+<dialog class="confirm-dialog" id="confirmDialog">
+  <div class="dlg-head">
+    <h2>Confirm order</h2>
+    <button type="button" id="confirmClose" aria-label="Close">&times;</button>
+  </div>
+  <div class="confirm-body">
+    <p class="confirm-summary" id="confirmSummary"></p>
+    <div class="confirm-actions">
+      <button type="button" class="ghost-btn" id="confirmCancel">Cancel</button>
+      <button type="button" class="place" id="confirmOk">Confirm &amp; submit</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="/static/js/jersey.js?v=kit-icons-2"></script>
 </body>
 </html>

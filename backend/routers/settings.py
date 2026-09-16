@@ -24,9 +24,12 @@ UPLOAD_DIR = os.path.abspath(
 )
 WAITING_BG_KEY = "waiting_background_url"
 SIZE_CHART_KEY = "jersey_size_chart_url"
+SHORTS_SIZE_CHART_KEY = "shorts_size_chart_url"
 JERSEY_SIZES_KEY = "jersey_sizes"
+SHORTS_SIZES_KEY = "shorts_sizes"
 JERSEY_FIELDS_KEY = "jersey_form_fields"
 DEFAULT_JERSEY_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"]
+DEFAULT_SHORTS_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"]
 DEFAULT_JERSEY_FIELDS = {
     "team": {"enabled": True, "required": True},
     "player_name": {"enabled": True, "required": False},
@@ -42,13 +45,14 @@ class SettingsBody(BaseModel):
     auction_timer_seconds: int
     auction_timer_enabled: bool = True
     jersey_sizes: Optional[list[str]] = None
+    shorts_sizes: Optional[list[str]] = None
     jersey_form_fields: Optional[dict] = None
 
 
-def parse_jersey_sizes(raw: str) -> list[str]:
+def parse_size_list(raw: str, defaults: list[str]) -> list[str]:
     text = (raw or "").strip()
     if not text:
-        return list(DEFAULT_JERSEY_SIZES)
+        return list(defaults)
     try:
         data = json.loads(text)
         if isinstance(data, list):
@@ -58,11 +62,15 @@ def parse_jersey_sizes(raw: str) -> list[str]:
     except json.JSONDecodeError:
         pass
     sizes = [part.strip() for part in text.replace("\n", ",").split(",") if part.strip()]
-    return sizes or list(DEFAULT_JERSEY_SIZES)
+    return sizes or list(defaults)
 
 
 def get_jersey_sizes(cur) -> list[str]:
-    return parse_jersey_sizes(get_setting(cur, JERSEY_SIZES_KEY, "") or "")
+    return parse_size_list(get_setting(cur, JERSEY_SIZES_KEY, "") or "", DEFAULT_JERSEY_SIZES)
+
+
+def get_shorts_sizes(cur) -> list[str]:
+    return parse_size_list(get_setting(cur, SHORTS_SIZES_KEY, "") or "", DEFAULT_SHORTS_SIZES)
 
 
 def _slug_field_id(label: str, used: set[str]) -> str:
@@ -162,7 +170,9 @@ def _read_settings(cur):
         "auction_timer_enabled": is_auction_timer_enabled(cur),
         "waiting_background_url": get_setting(cur, WAITING_BG_KEY, "") or "",
         "jersey_size_chart_url": get_setting(cur, SIZE_CHART_KEY, "") or "",
+        "shorts_size_chart_url": get_setting(cur, SHORTS_SIZE_CHART_KEY, "") or "",
         "jersey_sizes": get_jersey_sizes(cur),
+        "shorts_sizes": get_shorts_sizes(cur),
         "jersey_form_fields": get_jersey_form_fields(cur),
     }
 
@@ -228,11 +238,13 @@ def get_settings(request: Request, _=Depends(require_any)):
 
 @router.get("/jersey-public")
 def get_jersey_public_settings():
-    """Public jersey page: sizes, size chart, and form field rules."""
+    """Public jersey page: sizes, size charts, and form field rules."""
     with db_cursor() as cur:
         return {
             "jersey_size_chart_url": get_setting(cur, SIZE_CHART_KEY, "") or "",
+            "shorts_size_chart_url": get_setting(cur, SHORTS_SIZE_CHART_KEY, "") or "",
             "jersey_sizes": get_jersey_sizes(cur),
+            "shorts_sizes": get_shorts_sizes(cur),
             "jersey_form_fields": get_jersey_form_fields(cur),
         }
 
@@ -250,6 +262,11 @@ async def update_settings(body: SettingsBody, request: Request, _=Depends(requir
             if not sizes:
                 raise HTTPException(status_code=400, detail="Add at least one jersey size")
             set_setting(cur, JERSEY_SIZES_KEY, json.dumps(sizes))
+        if body.shorts_sizes is not None:
+            sizes = [str(item).strip() for item in body.shorts_sizes if str(item).strip()]
+            if not sizes:
+                raise HTTPException(status_code=400, detail="Add at least one shorts size")
+            set_setting(cur, SHORTS_SIZES_KEY, json.dumps(sizes))
         if body.jersey_form_fields is not None:
             fields = normalize_jersey_form_fields(body.jersey_form_fields)
             set_setting(cur, JERSEY_FIELDS_KEY, json.dumps(fields))
@@ -311,6 +328,35 @@ async def clear_jersey_size_chart(request: Request, _=Depends(require_admin)):
     with db_cursor() as cur:
         old = get_setting(cur, SIZE_CHART_KEY, "") or ""
         set_setting(cur, SIZE_CHART_KEY, "")
+        result = _read_settings(cur)
+    if old:
+        _delete_local_file(old)
+    await broadcaster.publish("settings_updated", result)
+    return result
+
+
+@router.post("/shorts-size-chart")
+async def upload_shorts_size_chart(
+    request: Request,
+    photo: UploadFile = File(...),
+    _=Depends(require_admin),
+):
+    url = _save_branding_upload(photo, "shorts-size-chart")
+    with db_cursor() as cur:
+        old = get_setting(cur, SHORTS_SIZE_CHART_KEY, "") or ""
+        set_setting(cur, SHORTS_SIZE_CHART_KEY, url)
+        result = _read_settings(cur)
+    if old and old != url:
+        _delete_local_file(old)
+    await broadcaster.publish("settings_updated", result)
+    return result
+
+
+@router.delete("/shorts-size-chart")
+async def clear_shorts_size_chart(request: Request, _=Depends(require_admin)):
+    with db_cursor() as cur:
+        old = get_setting(cur, SHORTS_SIZE_CHART_KEY, "") or ""
+        set_setting(cur, SHORTS_SIZE_CHART_KEY, "")
         result = _read_settings(cur)
     if old:
         _delete_local_file(old)

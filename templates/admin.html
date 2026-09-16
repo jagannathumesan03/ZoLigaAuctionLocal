@@ -223,7 +223,7 @@
 
       <div class="field settings-bg-block">
         <label>Jersey size chart</label>
-        <p class="muted settings-help">Shown on the public jersey page when no team is selected.</p>
+        <p class="muted settings-help">Shown when someone opens the jersey size chart on the public jersey page.</p>
         <div class="settings-bg-preview-wrap">
           <div class="settings-bg-preview settings-size-chart-preview" id="jerseySizeChartPreview" aria-hidden="true"></div>
           <p class="muted" id="jerseySizeChartEmpty">No size chart uploaded yet.</p>
@@ -239,11 +239,39 @@
 
       <div class="field settings-bg-block mt-16">
         <label for="jerseySizesInput">Jersey sizes</label>
-        <p class="muted settings-help">One size per line (or comma-separated). These options appear in the jersey size dropdown.</p>
+        <p class="muted settings-help">One size per line (or comma-separated). These options appear as size chips on the public jersey page.</p>
         <textarea id="jerseySizesInput" rows="6" placeholder="XS&#10;S&#10;M&#10;L&#10;XL&#10;XXL&#10;3XL"></textarea>
         <div class="row mt-16">
           <button type="button" class="btn btn-primary btn-sm" onclick="saveJerseySizes()">Save sizes</button>
           <span class="muted" id="jerseySizesStatus" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="field settings-bg-block">
+        <label>Shorts size chart</label>
+        <p class="muted settings-help">Shown when someone opens the shorts size chart on the public jersey page.</p>
+        <div class="settings-bg-preview-wrap">
+          <div class="settings-bg-preview settings-size-chart-preview" id="shortsSizeChartPreview" aria-hidden="true"></div>
+          <p class="muted" id="shortsSizeChartEmpty">No shorts size chart uploaded yet.</p>
+        </div>
+        <div class="row mt-16 toolbar-actions">
+          <label class="btn btn-sm upload-button">
+            Upload size chart
+            <input type="file" accept="image/*" id="shortsSizeChartInput" style="display:none" onchange="uploadShortsSizeChart(event)">
+          </label>
+          <button type="button" class="btn btn-sm btn-warn" id="shortsSizeChartClearBtn" style="display:none;" onclick="clearShortsSizeChart()">Remove chart</button>
+        </div>
+      </div>
+
+      <div class="field settings-bg-block mt-16">
+        <label for="shortsSizesInput">Shorts sizes</label>
+        <p class="muted settings-help">One size per line (or comma-separated). Used when a player opts in to order shorts.</p>
+        <textarea id="shortsSizesInput" rows="6" placeholder="XS&#10;S&#10;M&#10;L&#10;XL&#10;2XL&#10;3XL"></textarea>
+        <div class="row mt-16">
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveShortsSizes()">Save sizes</button>
+          <span class="muted" id="shortsSizesStatus" aria-live="polite"></span>
         </div>
       </div>
 
@@ -377,6 +405,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=jersey-extra-cols-1"></script>
+<script src="/static/js/admin.js?v=shorts-sizes-1"></script>
 </body>
 </html>

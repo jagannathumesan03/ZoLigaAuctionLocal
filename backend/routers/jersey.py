@@ -12,7 +12,7 @@ from fastapi.responses import Response
 from backend.database import db_cursor, rows_to_list
 from backend.auth import require_admin
 from backend.sse import broadcaster
-from backend.routers.settings import get_jersey_sizes, get_jersey_form_fields
+from backend.routers.settings import get_jersey_sizes, get_shorts_sizes, get_jersey_form_fields
 
 router = APIRouter(prefix="/api/jersey-orders", tags=["jersey"])
 
@@ -22,6 +22,9 @@ class JerseyOrderBody(BaseModel):
     player_name: str = ""
     jersey_number: str = ""
     size: str = ""
+    shorts_size: str = ""
+    want_shorts: bool = False
+    want_print: bool = False
     extra_fields: Optional[dict] = None
 
 
@@ -106,7 +109,7 @@ def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    header = ["when", "team", "name", "number", "size"] + [
+    header = ["when", "team", "name", "number", "size", "shorts_size"] + [
         label_by_id.get(cid, cid) for cid in custom_ids
     ]
     writer.writerow(header)
@@ -118,6 +121,7 @@ def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
             o.get("player_name") or "",
             o.get("jersey_number") or "",
             o.get("size") or "",
+            o.get("shorts_size") or "",
         ]
         row.extend(extras.get(cid, "") for cid in custom_ids)
         writer.writerow(row)
@@ -146,17 +150,26 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
         name = (body.player_name or "").strip()
         number = (body.jersey_number or "").strip()
         raw_size = (body.size or "").strip()
+        raw_shorts = (body.shorts_size or "").strip()
+        want_shorts = bool(body.want_shorts) or bool(raw_shorts)
+        want_print = bool(body.want_print) or bool(name) or bool(number)
         incoming_extra = body.extra_fields if isinstance(body.extra_fields, dict) else {}
 
-        if not fields["player_name"]["enabled"]:
+        if not fields["player_name"]["enabled"] or not want_print:
             name = ""
         elif fields["player_name"]["required"] and not name:
             raise HTTPException(status_code=400, detail="Player name is required")
 
-        if not fields["jersey_number"]["enabled"]:
+        if not fields["jersey_number"]["enabled"] or not want_print:
             number = ""
         elif fields["jersey_number"]["required"] and not number:
             raise HTTPException(status_code=400, detail="Jersey number is required")
+
+        if want_print and fields["player_name"]["enabled"] and fields["jersey_number"]["enabled"]:
+            name_req = fields["player_name"]["required"]
+            number_req = fields["jersey_number"]["required"]
+            if not name_req and not number_req and not name and not number:
+                raise HTTPException(status_code=400, detail="Enter a name, a number, or both")
 
         size = ""
         if fields["size"]["enabled"]:
@@ -167,6 +180,15 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
                 size = _canonical_size(allowed, raw_size)
                 if not size:
                     raise HTTPException(status_code=400, detail="Choose a valid jersey size")
+
+        shorts_size = ""
+        if want_shorts:
+            if not raw_shorts:
+                raise HTTPException(status_code=400, detail="Choose a shorts size")
+            allowed_shorts = get_shorts_sizes(cur)
+            shorts_size = _canonical_size(allowed_shorts, raw_shorts)
+            if not shorts_size:
+                raise HTTPException(status_code=400, detail="Choose a valid shorts size")
 
         if not body.team_id:
             raise HTTPException(status_code=400, detail="Select a team first")
@@ -189,10 +211,10 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
         cur.execute(
             """
             INSERT INTO jersey_orders
-              (team_id, player_name, jersey_number, size, extra_fields, submitted_by)
-            VALUES (?, ?, ?, ?, ?, ?)
+              (team_id, player_name, jersey_number, size, shorts_size, extra_fields, submitted_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (body.team_id, name, number, size, json.dumps(extra), submitted_by),
+            (body.team_id, name, number, size, shorts_size, json.dumps(extra), submitted_by),
         )
         order = _order_row(cur, cur.lastrowid)
 

@@ -5,7 +5,9 @@ let state = {
   auctionTimerEnabled: true,
   waitingBackgroundUrl: '',
   jerseySizeChartUrl: '',
+  shortsSizeChartUrl: '',
   jerseySizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
+  shortsSizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
   jerseyFormFields: {
     team: { enabled: true, required: true },
     player_name: { enabled: true, required: false },
@@ -141,9 +143,13 @@ async function loadSettings() {
   state.auctionTimerEnabled = data.auction_timer_enabled !== false;
   state.waitingBackgroundUrl = data.waiting_background_url || '';
   state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
+  state.shortsSizeChartUrl = data.shorts_size_chart_url || '';
   state.jerseySizes = Array.isArray(data.jersey_sizes) && data.jersey_sizes.length
     ? data.jersey_sizes
     : ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+  state.shortsSizes = Array.isArray(data.shorts_sizes) && data.shorts_sizes.length
+    ? data.shorts_sizes
+    : ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
   fillSettingsForm();
 }
@@ -203,7 +209,7 @@ function renderJerseyOrders() {
   if (!tbody) return;
   const orders = state.jerseyOrders || [];
   const customCols = jerseyCustomColumns();
-  const colCount = 6 + customCols.length;
+  const colCount = 7 + customCols.length;
 
   if (countEl) {
     countEl.textContent = orders.length === 1 ? '1 order' : `${orders.length} orders`;
@@ -215,7 +221,8 @@ function renderJerseyOrders() {
       <th>Team</th>
       <th>Name</th>
       <th>Number</th>
-      <th>Size</th>
+      <th>Jersey</th>
+      <th>Shorts</th>
       ${customCols.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}
       <th></th>
     </tr>`;
@@ -243,6 +250,7 @@ function renderJerseyOrders() {
       <td>${escapeHtml(o.player_name || '—')}</td>
       <td>${escapeHtml(o.jersey_number || '—')}</td>
       <td><strong>${escapeHtml(o.size || '—')}</strong></td>
+      <td>${escapeHtml(o.shorts_size || '—')}</td>
       ${customCells}
       <td>
         <button class="btn btn-sm btn-danger" type="button" onclick="deleteJerseyOrder(${o.id})">Delete</button>
@@ -281,8 +289,11 @@ function fillSettingsForm() {
   if (secondsEl) secondsEl.disabled = !state.auctionTimerEnabled;
   renderWaitingBgPreview();
   renderJerseySizeChartPreview();
+  renderShortsSizeChartPreview();
   const sizesInput = document.getElementById('jerseySizesInput');
   if (sizesInput) sizesInput.value = (state.jerseySizes || []).join('\n');
+  const shortsSizesInput = document.getElementById('shortsSizesInput');
+  if (shortsSizesInput) shortsSizesInput.value = (state.shortsSizes || []).join('\n');
   fillJerseyFormFieldsConfig();
 }
 
@@ -516,6 +527,25 @@ function renderJerseySizeChartPreview() {
   }
 }
 
+function renderShortsSizeChartPreview() {
+  const preview = document.getElementById('shortsSizeChartPreview');
+  const empty = document.getElementById('shortsSizeChartEmpty');
+  const clearBtn = document.getElementById('shortsSizeChartClearBtn');
+  if (!preview) return;
+  const url = state.shortsSizeChartUrl;
+  if (url) {
+    preview.style.backgroundImage = `url("${url}")`;
+    preview.classList.add('has-image');
+    if (empty) empty.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = '';
+  } else {
+    preview.style.backgroundImage = '';
+    preview.classList.remove('has-image');
+    if (empty) empty.style.display = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+}
+
 async function submitSettingsForm(e) {
   e.preventDefault();
   const enabled = !!document.getElementById('timerEnabled').checked;
@@ -536,7 +566,9 @@ async function submitSettingsForm(e) {
     state.auctionTimerEnabled = data.auction_timer_enabled !== false;
     state.waitingBackgroundUrl = data.waiting_background_url || state.waitingBackgroundUrl;
     state.jerseySizeChartUrl = data.jersey_size_chart_url || state.jerseySizeChartUrl;
+    state.shortsSizeChartUrl = data.shorts_size_chart_url || state.shortsSizeChartUrl;
     if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
+    if (Array.isArray(data.shorts_sizes) && data.shorts_sizes.length) state.shortsSizes = data.shorts_sizes;
     fillSettingsForm();
     status.textContent = enabled
       ? 'Saved — timer applies to the next player put up for auction.'
@@ -574,10 +606,48 @@ async function saveJerseySizes() {
     });
     state.jerseySizes = data.jersey_sizes || sizes;
     state.jerseySizeChartUrl = data.jersey_size_chart_url || state.jerseySizeChartUrl;
+    state.shortsSizeChartUrl = data.shorts_size_chart_url || state.shortsSizeChartUrl;
+    if (Array.isArray(data.shorts_sizes) && data.shorts_sizes.length) state.shortsSizes = data.shorts_sizes;
     if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
     fillSettingsForm();
     if (status) status.textContent = `Saved ${state.jerseySizes.length} size(s).`;
     toast('Jersey sizes updated');
+  } catch (err) {
+    if (status) status.textContent = '';
+    toast(err.message, true);
+  }
+}
+
+async function saveShortsSizes() {
+  const status = document.getElementById('shortsSizesStatus');
+  const raw = (document.getElementById('shortsSizesInput') || {}).value || '';
+  const sizes = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  if (!sizes.length) {
+    if (status) status.textContent = 'Add at least one size.';
+    toast('Add at least one shorts size', true);
+    return;
+  }
+  try {
+    const enabled = !!document.getElementById('timerEnabled').checked;
+    const minutes = parseInt(document.getElementById('timerMinutes').value, 10) || 0;
+    const seconds = parseInt(document.getElementById('timerSeconds').value, 10) || 0;
+    const total = Math.max(5, minutes * 60 + seconds);
+    const data = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auction_timer_seconds: total,
+        auction_timer_enabled: enabled,
+        shorts_sizes: sizes,
+      }),
+    });
+    state.shortsSizes = data.shorts_sizes || sizes;
+    state.shortsSizeChartUrl = data.shorts_size_chart_url || state.shortsSizeChartUrl;
+    state.jerseySizeChartUrl = data.jersey_size_chart_url || state.jerseySizeChartUrl;
+    if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
+    fillSettingsForm();
+    if (status) status.textContent = `Saved ${state.shortsSizes.length} size(s).`;
+    toast('Shorts sizes updated');
   } catch (err) {
     if (status) status.textContent = '';
     toast(err.message, true);
@@ -686,7 +756,9 @@ async function uploadJerseySizeChart(event) {
     }
     const data = await res.json();
     state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
+    state.shortsSizeChartUrl = data.shorts_size_chart_url || state.shortsSizeChartUrl;
     if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
+    if (Array.isArray(data.shorts_sizes) && data.shorts_sizes.length) state.shortsSizes = data.shorts_sizes;
     renderJerseySizeChartPreview();
     toast('Jersey size chart updated');
   } catch (err) {
@@ -700,6 +772,52 @@ async function clearJerseySizeChart() {
     state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
     renderJerseySizeChartPreview();
     toast('Jersey size chart removed');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function uploadShortsSizeChart(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    toast('Image is too large (max ~8 MB). Compress it and try again.', true);
+    return;
+  }
+  const form = new FormData();
+  form.append('photo', file);
+  try {
+    const res = await fetch('/api/settings/shorts-size-chart', { method: 'POST', body: form });
+    if (!res.ok) {
+      let detail = `Upload failed (${res.status})`;
+      try {
+        const body = await res.json();
+        if (typeof body.detail === 'string') detail = body.detail;
+        else if (Array.isArray(body.detail)) {
+          detail = body.detail.map(d => d.msg || JSON.stringify(d)).join('; ') || detail;
+        }
+      } catch (e) {
+        if (res.status === 413) detail = 'File too large for the server. Compress the image and try again.';
+      }
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    state.shortsSizeChartUrl = data.shorts_size_chart_url || '';
+    if (Array.isArray(data.shorts_sizes) && data.shorts_sizes.length) state.shortsSizes = data.shorts_sizes;
+    renderShortsSizeChartPreview();
+    toast('Shorts size chart updated');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function clearShortsSizeChart() {
+  try {
+    const data = await apiFetch('/api/settings/shorts-size-chart', { method: 'DELETE' });
+    state.shortsSizeChartUrl = data.shorts_size_chart_url || '';
+    renderShortsSizeChartPreview();
+    toast('Shorts size chart removed');
   } catch (err) {
     toast(err.message, true);
   }
@@ -776,7 +894,9 @@ function connectSSE() {
       state.auctionTimerEnabled = data.auction_timer_enabled !== false;
       state.waitingBackgroundUrl = data.waiting_background_url || '';
       state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
+      state.shortsSizeChartUrl = data.shorts_size_chart_url || '';
       if (Array.isArray(data.jersey_sizes) && data.jersey_sizes.length) state.jerseySizes = data.jersey_sizes;
+      if (Array.isArray(data.shorts_sizes) && data.shorts_sizes.length) state.shortsSizes = data.shorts_sizes;
       if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
       fillSettingsForm();
       if (state.currentAuction) await loadCurrentAuction();
