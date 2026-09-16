@@ -586,6 +586,23 @@ html[data-theme="dark"] .jersey-kit-page .toggle input:checked + .track { backgr
   color: var(--navy);
   white-space: nowrap;
 }
+.jersey-kit-page .lines li.price-line span:last-child {
+  font-weight: 600;
+}
+.jersey-kit-page .total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 0 18px;
+  margin-top: -8px;
+}
+.jersey-kit-page .total[hidden] { display: none; }
+.jersey-kit-page .total b {
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 27px;
+  color: var(--navy);
+  font-weight: 700;
+}
 .jersey-kit-page .place {
   width: 100%;
   background: #14315C;

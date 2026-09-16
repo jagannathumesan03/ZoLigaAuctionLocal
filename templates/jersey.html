@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/jersey-kit.css?v=kit-icons-3">
+<link rel="stylesheet" href="/static/css/jersey-kit.css?v=kit-price-1">
 </head>
 <body class="jersey-kit-page">
 
@@ -140,6 +140,10 @@
       <section class="summary">
         <h2>Your order</h2>
         <ul class="lines" id="orderLines"></ul>
+        <div class="total" id="orderTotal" hidden>
+          <span>Total</span>
+          <b id="orderTotalValue">₹300</b>
+        </div>
         <button class="place" type="submit" id="jerseySubmitBtn">Place order</button>
         <p class="form-err" id="formErr">Check the highlighted fields above.</p>
       </section>
@@ -147,7 +151,7 @@
 
     <section class="done" id="done" aria-live="polite">
       <h2>Order placed</h2>
-      <p class="hint" id="doneMsg">Your kit order has been saved.</p>
+      <p class="hint" id="doneMsg">Your kit order has been saved. Further communications will be done through the shared contact details.</p>
       <dl id="doneList"></dl>
       <button class="place secondary" type="button" id="again">Start another order</button>
     </section>
@@ -178,6 +182,6 @@
   </div>
 </dialog>
 
-<script src="/static/js/jersey.js?v=kit-icons-2"></script>
+<script src="/static/js/jersey.js?v=kit-price-1"></script>
 </body>
 </html>

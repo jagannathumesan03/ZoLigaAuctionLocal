@@ -1,3 +1,21 @@
+const PRICE = { jersey: 300, shorts: 220 };
+
+function money(n) {
+  return `₹${Number(n).toLocaleString('en-IN')}`;
+}
+
+function orderPricing() {
+  const withShorts = !!jerseyUi.wantShorts;
+  const jersey = PRICE.jersey;
+  const shorts = withShorts ? PRICE.shorts : 0;
+  return {
+    withShorts,
+    jersey,
+    shorts,
+    total: jersey + shorts,
+  };
+}
+
 const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const DEFAULT_SHORTS_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 const DEFAULT_FIELDS = {
@@ -526,10 +544,16 @@ function openJerseyConfirm() {
       lines.push('Printing: <em>none</em>');
     }
   }
+  const pricing = orderPricing();
   if (sizeCfg.enabled) {
-    lines.push(`Jersey size: ${size ? `<strong>${escapeHtml(size)}</strong>` : '<em>none</em>'}`);
+    lines.push(`Jersey${size ? ` size ${escapeHtml(size)}` : ''}: <strong>${money(pricing.jersey)}</strong>`);
+  } else {
+    lines.push(`Jersey: <strong>${money(pricing.jersey)}</strong>`);
   }
-  lines.push(`Shorts: ${jerseyUi.wantShorts && shortsSize ? `<strong>${escapeHtml(shortsSize)}</strong>` : '<em>not ordered</em>'}`);
+  if (pricing.withShorts) {
+    lines.push(`Shorts${shortsSize ? ` size ${escapeHtml(shortsSize)}` : ''}: <strong>${money(pricing.shorts)}</strong>`);
+    lines.push(`Total: <strong>${money(pricing.total)}</strong>`);
+  }
   customFieldDefs().filter(f => f.enabled !== false).forEach(field => {
     const value = custom.values[field.id] || '';
     lines.push(`${escapeHtml(field.label || field.id)}: ${value ? escapeHtml(value) : '<em>none</em>'}`);
@@ -602,10 +626,12 @@ function showOrderDone(order) {
       items.push(['Printing', 'None']);
     }
   }
-  if (fieldConfig('size').enabled) {
-    items.push(['Jersey size', order.size || '—']);
+  const withShorts = !!(order.want_shorts || order.shorts_size);
+  items.push(['Jersey', `${order.size ? `Size ${order.size} · ` : ''}${money(PRICE.jersey)}`]);
+  if (withShorts) {
+    items.push(['Shorts', `${order.shorts_size ? `Size ${order.shorts_size} · ` : ''}${money(PRICE.shorts)}`]);
+    items.push(['Total', money(PRICE.jersey + PRICE.shorts)]);
   }
-  items.push(['Shorts', order.shorts_size || 'Not ordered']);
   customFieldDefs().filter(f => f.enabled !== false).forEach(field => {
     const value = (order.extra_fields || {})[field.id] || '';
     items.push([field.label || field.id, value || '—']);
@@ -616,7 +642,9 @@ function showOrderDone(order) {
       `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`
     ).join('');
   }
-  if (doneMsg) doneMsg.textContent = 'Your kit order has been saved.';
+  if (doneMsg) {
+    doneMsg.textContent = 'Your kit order has been saved. Further communications will be done through the shared contact details.';
+  }
   if (form) form.style.display = 'none';
   if (done) {
     done.classList.add('show');
@@ -950,35 +978,57 @@ function updateSummary() {
   const lines = $('#orderLines');
   if (!lines) return;
   const team = state.teams.find(t => String(t.id) === String(selectedTeamId()));
+  const pricing = orderPricing();
+  const size = selectedSize();
+  const shortsSize = selectedShortsSize();
   const rows = [];
   if (fieldConfig('team').enabled) {
-    rows.push(['Team', team ? team.name : '—']);
+    rows.push(['Team', team ? team.name : '—', false]);
   }
   if (fieldConfig('player_name').enabled || fieldConfig('jersey_number').enabled) {
     if (jerseyUi.wantPrint) {
       if (fieldConfig('player_name').enabled) {
         const name = playerNameValue();
-        rows.push(['Name', name ? name.toUpperCase() : '—']);
+        rows.push(['Name', name ? name.toUpperCase() : '—', false]);
       }
       if (fieldConfig('jersey_number').enabled) {
-        rows.push(['Number', jerseyNumberValue() || '—']);
+        rows.push(['Number', jerseyNumberValue() || '—', false]);
       }
     } else {
-      rows.push(['Printing', 'None']);
+      rows.push(['Printing', 'None', false]);
     }
   }
-  if (fieldConfig('size').enabled) {
-    rows.push(['Jersey size', selectedSize() || '—']);
+  rows.push([
+    size ? `Jersey, size ${size}` : 'Jersey',
+    money(pricing.jersey),
+    true,
+  ]);
+  if (pricing.withShorts) {
+    rows.push([
+      shortsSize ? `Shorts, size ${shortsSize}` : 'Shorts',
+      money(pricing.shorts),
+      true,
+    ]);
   }
-  rows.push(['Shorts', jerseyUi.wantShorts ? (selectedShortsSize() || 'Choose size') : 'Not ordered']);
   customFieldDefs().filter(f => f.enabled !== false).forEach(field => {
     const input = document.getElementById(`jerseyCustom_${field.id}`);
     const value = (input && input.value || '').trim();
-    rows.push([field.label || field.id, value || '—']);
+    rows.push([field.label || field.id, value || '—', false]);
   });
-  lines.innerHTML = rows.map(([k, v]) =>
-    `<li><span>${escapeHtml(k)}</span><span>${escapeHtml(v)}</span></li>`
+  lines.innerHTML = rows.map(([k, v, isPrice]) =>
+    `<li class="${isPrice ? 'price-line' : ''}"><span>${escapeHtml(k)}</span><span>${escapeHtml(v)}</span></li>`
   ).join('');
+
+  const totalWrap = $('#orderTotal');
+  const totalValue = $('#orderTotalValue');
+  if (totalWrap && totalValue) {
+    if (pricing.withShorts) {
+      totalWrap.hidden = false;
+      totalValue.textContent = money(pricing.total);
+    } else {
+      totalWrap.hidden = true;
+    }
+  }
 }
 
 init();
