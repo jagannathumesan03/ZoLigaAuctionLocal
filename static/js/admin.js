@@ -162,25 +162,75 @@ function formatJerseyWhen(value) {
   return d.toLocaleString();
 }
 
+function jerseyCustomColumns() {
+  const fields = state.jerseyFormFields || {};
+  const customDefs = Array.isArray(fields.custom) ? fields.custom.slice() : [];
+  const byId = Object.fromEntries(customDefs.map(c => [c.id, c]));
+  const columns = [];
+  const seen = new Set();
+
+  const order = Array.isArray(fields.order) ? fields.order : [];
+  order.forEach(key => {
+    if (!key || !String(key).startsWith('custom:')) return;
+    const id = String(key).slice(7);
+    if (!id || seen.has(id) || !byId[id]) return;
+    seen.add(id);
+    columns.push({ id, label: byId[id].label || id });
+  });
+  customDefs.forEach(c => {
+    if (!c || !c.id || seen.has(c.id)) return;
+    seen.add(c.id);
+    columns.push({ id: c.id, label: c.label || c.id });
+  });
+
+  // Keep historical custom keys from existing orders even if the field was removed.
+  (state.jerseyOrders || []).forEach(o => {
+    const extras = o.extra_fields || {};
+    Object.keys(extras).forEach(id => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      columns.push({ id, label: id });
+    });
+  });
+
+  return columns;
+}
+
 function renderJerseyOrders() {
   const tbody = document.getElementById('jerseyOrdersList');
+  const thead = document.getElementById('jerseyOrdersHead');
   const countEl = document.getElementById('jerseyOrderCount');
   if (!tbody) return;
   const orders = state.jerseyOrders || [];
+  const customCols = jerseyCustomColumns();
+  const colCount = 6 + customCols.length;
+
   if (countEl) {
     countEl.textContent = orders.length === 1 ? '1 order' : `${orders.length} orders`;
   }
+
+  if (thead) {
+    thead.innerHTML = `<tr>
+      <th>When</th>
+      <th>Team</th>
+      <th>Name</th>
+      <th>Number</th>
+      <th>Size</th>
+      ${customCols.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}
+      <th></th>
+    </tr>`;
+  }
+
   if (!orders.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="muted">No jersey orders yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">No jersey orders yet.</td></tr>`;
     return;
   }
-  const customDefs = ((state.jerseyFormFields || {}).custom) || [];
-  const labelById = Object.fromEntries(customDefs.map(c => [c.id, c.label]));
+
   tbody.innerHTML = orders.map(o => {
     const extras = o.extra_fields || {};
-    const extraText = Object.keys(extras).length
-      ? Object.entries(extras).map(([id, val]) => `${labelById[id] || id}: ${val}`).join(' · ')
-      : '—';
+    const customCells = customCols.map(c =>
+      `<td>${escapeHtml(extras[c.id] || '—')}</td>`
+    ).join('');
     return `
     <tr>
       <td>${escapeHtml(formatJerseyWhen(o.created_at))}</td>
@@ -193,7 +243,7 @@ function renderJerseyOrders() {
       <td>${escapeHtml(o.player_name || '—')}</td>
       <td>${escapeHtml(o.jersey_number || '—')}</td>
       <td><strong>${escapeHtml(o.size || '—')}</strong></td>
-      <td class="muted">${escapeHtml(extraText)}</td>
+      ${customCells}
       <td>
         <button class="btn btn-sm btn-danger" type="button" onclick="deleteJerseyOrder(${o.id})">Delete</button>
       </td>
@@ -553,6 +603,7 @@ async function saveJerseyFormFields() {
     });
     if (data.jersey_form_fields) state.jerseyFormFields = data.jersey_form_fields;
     fillSettingsForm();
+    renderJerseyOrders();
     if (status) status.textContent = 'Field options saved.';
     toast('Jersey field options updated');
   } catch (err) {
