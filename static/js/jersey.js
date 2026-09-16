@@ -417,9 +417,9 @@ function paintJerseyPreview() {
         <div class="jersey-image-wrap jersey-image-wrap-back">
           <img src="${back}" alt="${escapeHtml(team.name)} jersey back">
           <div class="jersey-back-print" aria-hidden="true">
-            <svg class="jersey-name-arch" viewBox="0 0 220 48" preserveAspectRatio="xMidYMid meet">
+            <svg class="jersey-name-arch" viewBox="0 0 220 64" preserveAspectRatio="xMidYMid meet">
               <defs>
-                <path id="jerseyNameArc-${team.id}" d="M 18 38 Q 110 4 202 38" fill="none"></path>
+                <path id="jerseyNameArc-${team.id}" d="M 12 48 Q 110 8 208 48" fill="none"></path>
               </defs>
               <text class="jersey-name-arch-text">
                 <textPath href="#jerseyNameArc-${team.id}" startOffset="50%" text-anchor="middle">

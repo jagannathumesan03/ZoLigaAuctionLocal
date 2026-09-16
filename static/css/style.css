@@ -1872,17 +1872,17 @@ h1, h2, h3 { letter-spacing: 0; }
 .jersey-name-arch {
   position: absolute;
   left: 50%;
-  top: 18%;
-  width: 62%;
+  top: 16%;
+  width: 70%;
   height: auto;
   transform: translateX(-50%);
   overflow: visible;
 }
 .jersey-name-arch-text {
   fill: #fff;
-  font-size: 18px;
+  font-size: 28px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
 }
