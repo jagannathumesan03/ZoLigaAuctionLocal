@@ -39,6 +39,7 @@ const state = {
 const jerseyUi = {
   teamId: '',
   size: '',
+  sleeveLength: '',
   shortsSize: '',
   wantShorts: false,
   wantPrint: false,
@@ -255,13 +256,17 @@ function collectCustomFieldValues() {
 }
 
 function selectedTeamId() {
-  const checked = document.querySelector('input[name="team"]:checked');
-  return jerseyUi.teamId || (checked && checked.value) || '';
+  return jerseyUi.teamId || '';
 }
 
 function selectedSize() {
-  const checked = document.querySelector('input[name="jsize"]:checked');
-  return jerseyUi.size || (checked && checked.value) || '';
+  const select = $('#jerseySize');
+  return jerseyUi.size || (select && select.value) || '';
+}
+
+function selectedSleeveLength() {
+  const select = $('#jerseySleeve');
+  return jerseyUi.sleeveLength || (select && select.value) || '';
 }
 
 function selectedShortsSize() {
@@ -336,11 +341,48 @@ function setupJerseyForm() {
   const again = $('#again');
   const wantShorts = $('#wantShorts');
   const wantPrint = $('#wantPrint');
+  const teamTrigger = $('#jerseyTeamSelect');
+  const sizeSelect = $('#jerseySize');
+  const sleeveSelect = $('#jerseySleeve');
 
   if (form) {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       openJerseyConfirm();
+    });
+  }
+
+  if (teamTrigger) {
+    teamTrigger.addEventListener('click', () => {
+      const wrap = $('#teamSelect');
+      if (wrap && wrap.classList.contains('is-open')) closeTeamSelect();
+      else openTeamSelect();
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const wrap = $('#teamSelect');
+    if (!wrap || wrap.contains(e.target)) return;
+    closeTeamSelect();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeTeamSelect();
+  });
+
+  if (sizeSelect) {
+    sizeSelect.addEventListener('change', () => {
+      jerseyUi.size = sizeSelect.value;
+      sizeSelect.setAttribute('aria-invalid', sizeSelect.value ? 'false' : 'true');
+      showErr('errSize', false);
+      updateSummary();
+    });
+  }
+
+  if (sleeveSelect) {
+    sleeveSelect.addEventListener('change', () => {
+      jerseyUi.sleeveLength = sleeveSelect.value;
+      sleeveSelect.setAttribute('aria-invalid', sleeveSelect.value ? 'false' : 'true');
+      showErr('errSleeve', false);
+      updateSummary();
     });
   }
 
@@ -431,7 +473,7 @@ function showErr(id, show) {
 }
 
 function clearErrors() {
-  ['errTeam', 'errPrint', 'errSize', 'errShortsSize', 'errCustom', 'formErr'].forEach(id => showErr(id, false));
+  ['errTeam', 'errPrint', 'errSize', 'errSleeve', 'errShortsSize', 'errCustom', 'formErr'].forEach(id => showErr(id, false));
   $$('[aria-invalid]').forEach(el => el.setAttribute('aria-invalid', 'false'));
 }
 
@@ -446,14 +488,25 @@ function validateOrder() {
   const playerName = playerNameValue();
   const jerseyNumber = jerseyNumberValue();
   const size = selectedSize();
+  const sleeveLength = selectedSleeveLength();
   const shortsSize = selectedShortsSize();
 
   if (teamCfg.enabled && teamCfg.required && !teamId) {
     showErr('errTeam', true);
+    const trigger = $('#jerseyTeamSelect');
+    if (trigger) trigger.setAttribute('aria-invalid', 'true');
     ok = false;
   }
   if (sizeCfg.enabled && sizeCfg.required && !size) {
     showErr('errSize', true);
+    const sizeSelect = $('#jerseySize');
+    if (sizeSelect) sizeSelect.setAttribute('aria-invalid', 'true');
+    ok = false;
+  }
+  if (!sleeveLength) {
+    showErr('errSleeve', true);
+    const sleeveSelect = $('#jerseySleeve');
+    if (sleeveSelect) sleeveSelect.setAttribute('aria-invalid', 'true');
     ok = false;
   }
   if (jerseyUi.wantShorts && !shortsSize) {
@@ -518,6 +571,7 @@ function openJerseyConfirm() {
   const playerName = playerNameValue();
   const jerseyNumber = jerseyNumberValue();
   const size = selectedSize();
+  const sleeveLength = selectedSleeveLength();
   const shortsSize = selectedShortsSize();
 
   pendingOrder = {
@@ -525,6 +579,7 @@ function openJerseyConfirm() {
     player_name: playerName,
     jersey_number: jerseyNumber,
     size,
+    sleeve_length: sleeveLength,
     want_print: !!jerseyUi.wantPrint,
     want_shorts: !!jerseyUi.wantShorts,
     shorts_size: shortsSize,
@@ -550,6 +605,7 @@ function openJerseyConfirm() {
   } else {
     lines.push(`Jersey: <strong>${money(pricing.jersey)}</strong>`);
   }
+  lines.push(`Sleeve: <strong>${escapeHtml(sleeveLength)}</strong>`);
   if (pricing.withShorts) {
     lines.push(`Shorts${shortsSize ? ` size ${escapeHtml(shortsSize)}` : ''}: <strong>${money(pricing.shorts)}</strong>`);
     lines.push(`Total: <strong>${money(pricing.total)}</strong>`);
@@ -628,6 +684,7 @@ function showOrderDone(order) {
   }
   const withShorts = !!(order.want_shorts || order.shorts_size);
   items.push(['Jersey', `${order.size ? `Size ${order.size} · ` : ''}${money(PRICE.jersey)}`]);
+  items.push(['Sleeve', order.sleeve_length || '—']);
   if (withShorts) {
     items.push(['Shorts', `${order.shorts_size ? `Size ${order.shorts_size} · ` : ''}${money(PRICE.shorts)}`]);
     items.push(['Total', money(PRICE.jersey + PRICE.shorts)]);
@@ -662,6 +719,7 @@ function resetForAnotherOrder() {
   if (done) done.classList.remove('show');
   jerseyUi.teamId = '';
   jerseyUi.size = '';
+  jerseyUi.sleeveLength = '';
   jerseyUi.shortsSize = '';
   jerseyUi.wantShorts = false;
   jerseyUi.wantPrint = false;
@@ -669,10 +727,14 @@ function resetForAnotherOrder() {
   if (wantShorts) wantShorts.checked = false;
   const wantPrint = $('#wantPrint');
   if (wantPrint) wantPrint.checked = false;
+  const sleeveSelect = $('#jerseySleeve');
+  if (sleeveSelect) sleeveSelect.value = '';
   const shortsFields = $('#shortsFields');
   if (shortsFields) shortsFields.classList.remove('open');
   const printFields = $('#printFields');
   if (printFields) printFields.classList.remove('open');
+  closeTeamSelect();
+  setTeamSelectValue(null);
   clearErrors();
   renderJerseyPage();
   showView('front');
@@ -690,102 +752,143 @@ function renderJerseyPage() {
   updateSummary();
 }
 
+function teamLogoHtml(team) {
+  if (team && team.logo_url) {
+    return `<img class="swatch" src="${escapeHtml(team.logo_url)}" alt="">`;
+  }
+  return `<span class="swatch" aria-hidden="true"></span>`;
+}
+
+function setTeamSelectValue(team) {
+  const valueEl = $('#teamSelectValue');
+  const trigger = $('#jerseyTeamSelect');
+  if (!valueEl) return;
+  if (team) {
+    valueEl.innerHTML = `${teamLogoHtml(team)}<span>${escapeHtml(team.name)}</span>`;
+    if (trigger) trigger.setAttribute('aria-invalid', 'false');
+  } else {
+    valueEl.innerHTML = `<span class="swatch" aria-hidden="true"></span><span>Select a team…</span>`;
+  }
+}
+
+function closeTeamSelect() {
+  const wrap = $('#teamSelect');
+  const trigger = $('#jerseyTeamSelect');
+  const menu = $('#teamSelectMenu');
+  if (wrap) wrap.classList.remove('is-open');
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  if (menu) menu.hidden = true;
+}
+
+function openTeamSelect() {
+  const wrap = $('#teamSelect');
+  const trigger = $('#jerseyTeamSelect');
+  const menu = $('#teamSelectMenu');
+  if (wrap) wrap.classList.add('is-open');
+  if (trigger) trigger.setAttribute('aria-expanded', 'true');
+  if (menu) menu.hidden = false;
+}
+
+function chooseTeam(teamId) {
+  jerseyUi.teamId = teamId ? String(teamId) : '';
+  const team = state.teams.find(t => String(t.id) === String(jerseyUi.teamId));
+  setTeamSelectValue(team || null);
+  showErr('errTeam', false);
+  closeTeamSelect();
+  paintJerseyPreview();
+  updateSummary();
+  if (team && team.jersey_back_url && (playerNameValue() || jerseyNumberValue())) {
+    showView('back');
+  } else {
+    showView('front');
+  }
+}
+
 function renderTeamPicker() {
-  const picker = $('#teamPicker');
-  if (!picker) return;
+  const menu = $('#teamSelectMenu');
+  const trigger = $('#jerseyTeamSelect');
+  if (!menu || !trigger) return;
 
   const signature = state.teams.map(t =>
     `${t.id}:${t.logo_url || ''}:${t.jersey_front_url || ''}:${t.jersey_back_url || ''}:${t.shorts_url || ''}:${t.name}`
   ).join('|');
-  if (picker.dataset.teamSignature === signature) {
+  if (menu.dataset.teamSignature === signature) {
     syncTeamSelection();
     return;
   }
 
   if (!state.teams.length) {
-    picker.innerHTML = `<p class="hint" style="margin:0;">No teams yet. Ask the organizer to add teams in Admin.</p>`;
-    picker.dataset.teamSignature = signature;
+    menu.innerHTML = `<li class="hint" style="margin:8px;">No teams available…</li>`;
+    trigger.disabled = true;
+    menu.dataset.teamSignature = signature;
+    setTeamSelectValue(null);
     return;
   }
 
-  picker.innerHTML = state.teams.map(t => {
-    const logo = t.logo_url
-      ? `<img class="swatch" src="${escapeHtml(t.logo_url)}" alt="">`
-      : `<span class="swatch" aria-hidden="true"></span>`;
-    return `
-      <label class="team">
-        <input type="radio" name="team" value="${t.id}">
-        <span class="box">
-          ${logo}
-          <span>${escapeHtml(t.name)}</span>
-        </span>
-      </label>`;
-  }).join('');
+  trigger.disabled = false;
+  menu.innerHTML = state.teams.map(t => `
+    <li role="none">
+      <button type="button" class="team-select-option" role="option" data-team-id="${t.id}" aria-selected="false">
+        ${teamLogoHtml(t)}
+        <span>${escapeHtml(t.name)}</span>
+      </button>
+    </li>
+  `).join('');
 
-  picker.querySelectorAll('input[name="team"]').forEach(input => {
-    input.addEventListener('change', () => {
-      jerseyUi.teamId = input.value;
-      showErr('errTeam', false);
-      paintJerseyPreview();
-      updateSummary();
-      const team = state.teams.find(t => String(t.id) === String(input.value));
-      if (team && team.jersey_back_url && (playerNameValue() || jerseyNumberValue())) {
-        showView('back');
-      } else {
-        showView('front');
-      }
-    });
+  menu.querySelectorAll('[data-team-id]').forEach(btn => {
+    btn.addEventListener('click', () => chooseTeam(btn.dataset.teamId));
   });
 
-  picker.dataset.teamSignature = signature;
+  menu.dataset.teamSignature = signature;
   syncTeamSelection();
 }
 
 function syncTeamSelection() {
-  if (!jerseyUi.teamId) return;
-  const input = Array.from(document.querySelectorAll('input[name="team"]'))
-    .find(el => el.value === String(jerseyUi.teamId));
-  if (input) input.checked = true;
-  else jerseyUi.teamId = '';
+  const team = state.teams.find(t => String(t.id) === String(jerseyUi.teamId));
+  if (!team) {
+    jerseyUi.teamId = '';
+    setTeamSelectValue(null);
+  } else {
+    setTeamSelectValue(team);
+  }
+  $$('#teamSelectMenu [data-team-id]').forEach(btn => {
+    const selected = String(btn.dataset.teamId) === String(jerseyUi.teamId);
+    btn.classList.toggle('is-selected', selected);
+    btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
 }
 
 function renderSizeChips() {
-  const wrap = $('#sizeChips');
-  if (!wrap) return;
+  const select = $('#jerseySize');
+  if (!select) return;
   const sizes = Array.isArray(state.jerseySizes) && state.jerseySizes.length
     ? state.jerseySizes
     : DEFAULT_SIZES;
   const signature = sizes.join('|');
-  if (wrap.dataset.sizeSignature === signature) {
+  if (select.dataset.sizeSignature === signature) {
     syncSizeSelection();
     return;
   }
 
-  wrap.innerHTML = sizes.map(s => `
-    <label class="chip">
-      <input type="radio" name="jsize" value="${escapeHtml(s)}">
-      <span>${escapeHtml(s)}</span>
-    </label>
-  `).join('');
-
-  wrap.querySelectorAll('input[name="jsize"]').forEach(input => {
-    input.addEventListener('change', () => {
-      jerseyUi.size = input.value;
-      showErr('errSize', false);
-      updateSummary();
-    });
-  });
-
-  wrap.dataset.sizeSignature = signature;
+  select.innerHTML = `<option value="">Select size…</option>${sizes.map(s =>
+    `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`
+  ).join('')}`;
+  select.dataset.sizeSignature = signature;
   syncSizeSelection();
 }
 
 function syncSizeSelection() {
-  if (!jerseyUi.size) return;
-  const input = Array.from(document.querySelectorAll('input[name="jsize"]'))
-    .find(el => el.value === String(jerseyUi.size));
-  if (input) input.checked = true;
-  else jerseyUi.size = '';
+  const select = $('#jerseySize');
+  if (!select) return;
+  const sizes = Array.isArray(state.jerseySizes) && state.jerseySizes.length
+    ? state.jerseySizes
+    : DEFAULT_SIZES;
+  if (jerseyUi.size && sizes.includes(jerseyUi.size)) {
+    select.value = jerseyUi.size;
+  } else {
+    jerseyUi.size = '';
+    select.value = '';
+  }
 }
 
 function renderShortsSizeChips() {
@@ -1003,6 +1106,7 @@ function updateSummary() {
     money(pricing.jersey),
     true,
   ]);
+  rows.push(['Sleeve', selectedSleeveLength() || '—', false]);
   if (pricing.withShorts) {
     rows.push([
       shortsSize ? `Shorts, size ${shortsSize}` : 'Shorts',

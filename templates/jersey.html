@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/jersey-kit.css?v=kit-price-1">
+<link rel="stylesheet" href="/static/css/jersey-kit.css?v=kit-team-logo-1">
 </head>
 <body class="jersey-kit-page">
 
@@ -66,7 +66,19 @@
       <section class="block" id="blockTeam">
         <h2>Team</h2>
         <p class="hint">Each team has its own kit. The preview updates when you choose.</p>
-        <div class="teams" id="teamPicker" role="radiogroup" aria-label="Team"></div>
+        <div class="field" id="jerseyFieldTeam">
+          <label id="teamPickerLabel">Team name</label>
+          <div class="team-select" id="teamSelect">
+            <button type="button" class="team-select-trigger" id="jerseyTeamSelect" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="teamPickerLabel">
+              <span class="team-select-value" id="teamSelectValue">
+                <span class="swatch" aria-hidden="true"></span>
+                <span>Select a team…</span>
+              </span>
+              <span class="team-select-caret" aria-hidden="true"></span>
+            </button>
+            <ul class="team-select-menu" id="teamSelectMenu" role="listbox" hidden></ul>
+          </div>
+        </div>
         <p class="err" id="errTeam">Choose a team.</p>
       </section>
 
@@ -102,9 +114,25 @@
           <h2>Jersey size</h2>
           <button class="link-btn" type="button" id="sizeChartLink" data-chart="jersey">Size chart</button>
         </div>
-        <p class="hint">Pick one size.</p>
-        <div class="sizes" id="sizeChips" role="radiogroup" aria-label="Jersey size"></div>
+        <p class="hint">Pick a size and sleeve length.</p>
+        <div class="row">
+          <div class="field" id="jerseyFieldSize">
+            <label for="jerseySize">Size</label>
+            <select id="jerseySize" aria-label="Jersey size">
+              <option value="">Select size…</option>
+            </select>
+          </div>
+          <div class="field" id="jerseyFieldSleeve">
+            <label for="jerseySleeve">Sleeve length</label>
+            <select id="jerseySleeve" aria-label="Sleeve length">
+              <option value="">Select sleeve…</option>
+              <option value="Full sleeve">Full sleeve</option>
+              <option value="Half sleeve">Half sleeve</option>
+            </select>
+          </div>
+        </div>
         <p class="err" id="errSize">Choose a jersey size.</p>
+        <p class="err" id="errSleeve">Choose sleeve length.</p>
       </section>
 
       <section class="block" id="blockShorts">
@@ -179,6 +207,6 @@
   </div>
 </dialog>
 
-<script src="/static/js/jersey.js?v=kit-price-1"></script>
+<script src="/static/js/jersey.js?v=kit-team-logo-1"></script>
 </body>
 </html>

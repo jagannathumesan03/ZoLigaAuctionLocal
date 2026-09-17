@@ -209,7 +209,7 @@ function renderJerseyOrders() {
   if (!tbody) return;
   const orders = state.jerseyOrders || [];
   const customCols = jerseyCustomColumns();
-  const colCount = 7 + customCols.length;
+  const colCount = 8 + customCols.length;
 
   if (countEl) {
     countEl.textContent = orders.length === 1 ? '1 order' : `${orders.length} orders`;
@@ -222,6 +222,7 @@ function renderJerseyOrders() {
       <th>Name</th>
       <th>Number</th>
       <th>Jersey</th>
+      <th>Sleeve</th>
       <th>Shorts</th>
       ${customCols.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}
       <th></th>
@@ -250,6 +251,7 @@ function renderJerseyOrders() {
       <td>${escapeHtml(o.player_name || '—')}</td>
       <td>${escapeHtml(o.jersey_number || '—')}</td>
       <td><strong>${escapeHtml(o.size || '—')}</strong></td>
+      <td>${escapeHtml(o.sleeve_length || '—')}</td>
       <td>${escapeHtml(o.shorts_size || '—')}</td>
       ${customCells}
       <td>

@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS jersey_orders (
     player_name TEXT NOT NULL,
     jersey_number TEXT NOT NULL DEFAULT '',
     size TEXT NOT NULL DEFAULT '',
+    sleeve_length TEXT NOT NULL DEFAULT '',
     shorts_size TEXT NOT NULL DEFAULT '',
     extra_fields TEXT NOT NULL DEFAULT '{}',
     submitted_by TEXT DEFAULT '',
@@ -209,6 +210,8 @@ def _migrate(cur):
         cur.execute("ALTER TABLE jersey_orders ADD COLUMN extra_fields TEXT NOT NULL DEFAULT '{}'")
     if jersey_order_cols and "shorts_size" not in jersey_order_cols:
         cur.execute("ALTER TABLE jersey_orders ADD COLUMN shorts_size TEXT NOT NULL DEFAULT ''")
+    if jersey_order_cols and "sleeve_length" not in jersey_order_cols:
+        cur.execute("ALTER TABLE jersey_orders ADD COLUMN sleeve_length TEXT NOT NULL DEFAULT ''")
 
     cur.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",

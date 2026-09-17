@@ -22,10 +22,29 @@ class JerseyOrderBody(BaseModel):
     player_name: str = ""
     jersey_number: str = ""
     size: str = ""
+    sleeve_length: str = ""
     shorts_size: str = ""
     want_shorts: bool = False
     want_print: bool = False
     extra_fields: Optional[dict] = None
+
+
+SLEEVE_OPTIONS = ("Full sleeve", "Half sleeve")
+
+
+def _canonical_sleeve(raw: str):
+    needle = (raw or "").strip().lower()
+    if not needle:
+        return None
+    for option in SLEEVE_OPTIONS:
+        if option.lower() == needle:
+            return option
+    # Accept a few common aliases
+    if needle in ("full", "full-sleeve", "full sleeves"):
+        return "Full sleeve"
+    if needle in ("half", "half-sleeve", "half sleeves", "short", "short sleeve", "short sleeves"):
+        return "Half sleeve"
+    return None
 
 
 def _parse_extra_fields(raw) -> dict:
@@ -109,7 +128,7 @@ def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    header = ["when", "team", "name", "number", "size", "shorts_size"] + [
+    header = ["when", "team", "name", "number", "size", "sleeve_length", "shorts_size"] + [
         label_by_id.get(cid, cid) for cid in custom_ids
     ]
     writer.writerow(header)
@@ -121,6 +140,7 @@ def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
             o.get("player_name") or "",
             o.get("jersey_number") or "",
             o.get("size") or "",
+            o.get("sleeve_length") or "",
             o.get("shorts_size") or "",
         ]
         row.extend(extras.get(cid, "") for cid in custom_ids)
@@ -181,6 +201,10 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
                 if not size:
                     raise HTTPException(status_code=400, detail="Choose a valid jersey size")
 
+        sleeve_length = _canonical_sleeve(body.sleeve_length or "")
+        if not sleeve_length:
+            raise HTTPException(status_code=400, detail="Choose sleeve length")
+
         shorts_size = ""
         if want_shorts:
             if not raw_shorts:
@@ -211,10 +235,10 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
         cur.execute(
             """
             INSERT INTO jersey_orders
-              (team_id, player_name, jersey_number, size, shorts_size, extra_fields, submitted_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+              (team_id, player_name, jersey_number, size, sleeve_length, shorts_size, extra_fields, submitted_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (body.team_id, name, number, size, shorts_size, json.dumps(extra), submitted_by),
+            (body.team_id, name, number, size, sleeve_length, shorts_size, json.dumps(extra), submitted_by),
         )
         order = _order_row(cur, cur.lastrowid)
 

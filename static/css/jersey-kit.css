@@ -389,7 +389,8 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
 }
 .jersey-kit-page input[type="text"],
 .jersey-kit-page input[type="email"],
-.jersey-kit-page input[type="tel"] {
+.jersey-kit-page input[type="tel"],
+.jersey-kit-page select {
   width: 100%;
   padding: 10px 11px;
   font: 15px/1.4 "Barlow", sans-serif;
@@ -399,10 +400,29 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
   border-radius: var(--radius);
   box-sizing: border-box;
 }
-.jersey-kit-page input:hover { border-color: var(--input-hover); }
-.jersey-kit-page input[aria-invalid="true"] {
+.jersey-kit-page select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 3px),
+    calc(100% - 11px) calc(50% - 3px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+  cursor: pointer;
+}
+.jersey-kit-page input:hover,
+.jersey-kit-page select:hover { border-color: var(--input-hover); }
+.jersey-kit-page input[aria-invalid="true"],
+.jersey-kit-page select[aria-invalid="true"] {
   border-color: var(--alert);
-  background: var(--input-invalid-bg);
+  background-color: var(--input-invalid-bg);
+}
+.jersey-kit-page select:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
 }
 .jersey-kit-page .sub {
   font-size: 13px;
@@ -416,6 +436,105 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
   margin-top: 5px;
 }
 .jersey-kit-page .err.show { display: block; }
+
+.jersey-kit-page .team-select {
+  position: relative;
+}
+.jersey-kit-page .team-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 11px;
+  font: 15px/1.4 "Barlow", sans-serif;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+}
+.jersey-kit-page .team-select-trigger:hover { border-color: var(--input-hover); }
+.jersey-kit-page .team-select-trigger[aria-invalid="true"] {
+  border-color: var(--alert);
+  background-color: var(--input-invalid-bg);
+}
+.jersey-kit-page .team-select-trigger:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+.jersey-kit-page .team-select-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.jersey-kit-page .team-select-value > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jersey-kit-page .team-select-caret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--muted);
+  flex: none;
+  transition: transform 140ms ease;
+}
+.jersey-kit-page .team-select.is-open .team-select-caret {
+  transform: rotate(180deg);
+}
+.jersey-kit-page .team-select-menu {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 30px rgba(15, 37, 71, 0.22);
+  max-height: 280px;
+  overflow: auto;
+}
+.jersey-kit-page .team-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--navy);
+  font: 15px/1.3 "Barlow", sans-serif;
+  cursor: pointer;
+  text-align: left;
+}
+.jersey-kit-page .team-select-option:hover,
+.jersey-kit-page .team-select-option:focus-visible {
+  background: var(--stage);
+  outline: none;
+}
+.jersey-kit-page .team-select-option.is-selected {
+  background: var(--stage);
+  box-shadow: inset 0 0 0 1px var(--navy);
+}
+.jersey-kit-page .team-select .swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid var(--line);
+  object-fit: cover;
+  background: var(--swatch-bg);
+}
 
 .jersey-kit-page .teams {
   display: grid;
