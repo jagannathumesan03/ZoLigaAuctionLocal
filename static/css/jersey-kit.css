@@ -277,6 +277,10 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
 }
 .jersey-kit-page .jersey-name-arch-text {
   fill: #fff;
+  stroke: #0a1428;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
   font-size: 28px;
   font-weight: 800;
   letter-spacing: 0.1em;
