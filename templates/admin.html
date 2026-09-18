@@ -148,20 +148,37 @@
         </div>
       </div>
       <p class="muted mt-8">Names, numbers, and sizes submitted from the public Jersey order page.</p>
+      <div class="filter-row mt-16 jersey-orders-filters">
+        <input type="search" id="jerseyOrderSearch" placeholder="Search name, number, team…" aria-label="Search jersey orders">
+        <select id="jerseyOrderTeamFilter" aria-label="Filter by team">
+          <option value="">All teams</option>
+        </select>
+        <select id="jerseyOrderKitFilter" aria-label="Filter by kit">
+          <option value="">All kits</option>
+          <option value="home">Home</option>
+          <option value="away">Away</option>
+        </select>
+        <select id="jerseyOrderSizeFilter" aria-label="Filter by jersey size">
+          <option value="">All sizes</option>
+        </select>
+      </div>
       <div class="jersey-orders-wrap mt-16">
         <table class="jersey-orders-table" aria-label="Jersey orders">
           <thead id="jerseyOrdersHead">
             <tr>
               <th>When</th>
               <th>Team</th>
+              <th>Kit</th>
               <th>Name</th>
               <th>Number</th>
-              <th>Size</th>
+              <th>Jersey</th>
+              <th>Sleeve</th>
+              <th>Shorts</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="jerseyOrdersList">
-            <tr><td colspan="6" class="muted">No jersey orders yet.</td></tr>
+            <tr><td colspan="9" class="muted">No jersey orders yet.</td></tr>
           </tbody>
         </table>
       </div>
@@ -412,6 +429,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=away-kit-1"></script>
+<script src="/static/js/admin.js?v=jersey-filter-1"></script>
 </body>
 </html>

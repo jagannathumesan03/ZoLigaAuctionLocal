@@ -105,6 +105,15 @@ async function init() {
   document.getElementById('playerRoleFilter').addEventListener('change', renderPlayersList);
   document.getElementById('playerStarsFilter').addEventListener('change', renderPlayersList);
 
+  const jerseySearch = document.getElementById('jerseyOrderSearch');
+  const jerseyTeamFilter = document.getElementById('jerseyOrderTeamFilter');
+  const jerseyKitFilter = document.getElementById('jerseyOrderKitFilter');
+  const jerseySizeFilter = document.getElementById('jerseyOrderSizeFilter');
+  if (jerseySearch) jerseySearch.addEventListener('input', renderJerseyOrders);
+  if (jerseyTeamFilter) jerseyTeamFilter.addEventListener('change', renderJerseyOrders);
+  if (jerseyKitFilter) jerseyKitFilter.addEventListener('change', renderJerseyOrders);
+  if (jerseySizeFilter) jerseySizeFilter.addEventListener('change', renderJerseyOrders);
+
   document.getElementById('playerForm').addEventListener('submit', submitPlayerForm);
   document.getElementById('teamForm').addEventListener('submit', submitTeamForm);
   document.getElementById('assignForm').addEventListener('submit', submitAssignForm);
@@ -203,17 +212,88 @@ function jerseyCustomColumns() {
   return columns;
 }
 
+function fillJerseyOrderFilters() {
+  const orders = state.jerseyOrders || [];
+  const teamSelect = document.getElementById('jerseyOrderTeamFilter');
+  const sizeSelect = document.getElementById('jerseyOrderSizeFilter');
+
+  if (teamSelect) {
+    const prev = teamSelect.value;
+    const teams = [...new Map(
+      orders
+        .filter(o => o.team_id != null)
+        .map(o => [String(o.team_id), o.team_name || `Team ${o.team_id}`])
+    ).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    teamSelect.innerHTML = `<option value="">All teams</option>${teams.map(([id, name]) =>
+      `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`
+    ).join('')}`;
+    if (prev && teams.some(([id]) => id === prev)) teamSelect.value = prev;
+  }
+
+  if (sizeSelect) {
+    const prev = sizeSelect.value;
+    const sizes = [...new Set(
+      orders.map(o => (o.size || '').trim()).filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    sizeSelect.innerHTML = `<option value="">All sizes</option>${sizes.map(s =>
+      `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`
+    ).join('')}`;
+    if (prev && sizes.includes(prev)) sizeSelect.value = prev;
+  }
+}
+
+function filteredJerseyOrders() {
+  const orders = state.jerseyOrders || [];
+  const q = ((document.getElementById('jerseyOrderSearch') || {}).value || '').trim().toLowerCase();
+  const teamId = ((document.getElementById('jerseyOrderTeamFilter') || {}).value || '').trim();
+  const kit = ((document.getElementById('jerseyOrderKitFilter') || {}).value || '').trim().toLowerCase();
+  const size = ((document.getElementById('jerseyOrderSizeFilter') || {}).value || '').trim();
+
+  return orders.filter(o => {
+    if (teamId && String(o.team_id) !== teamId) return false;
+    const kitType = (o.kit_type || 'home').toLowerCase() === 'away' ? 'away' : 'home';
+    if (kit && kitType !== kit) return false;
+    if (size && String(o.size || '') !== size) return false;
+    if (!q) return true;
+    const extras = o.extra_fields || {};
+    const hay = [
+      o.team_name,
+      o.player_name,
+      o.jersey_number,
+      o.size,
+      o.sleeve_length,
+      o.shorts_size,
+      kitType,
+      ...Object.values(extras),
+    ].map(v => String(v || '').toLowerCase()).join(' ');
+    return hay.includes(q);
+  });
+}
+
 function renderJerseyOrders() {
   const tbody = document.getElementById('jerseyOrdersList');
   const thead = document.getElementById('jerseyOrdersHead');
   const countEl = document.getElementById('jerseyOrderCount');
   if (!tbody) return;
-  const orders = state.jerseyOrders || [];
+  fillJerseyOrderFilters();
+  const allOrders = state.jerseyOrders || [];
+  const orders = filteredJerseyOrders();
   const customCols = jerseyCustomColumns();
   const colCount = 9 + customCols.length;
+  const filtered = orders.length !== allOrders.length
+    || !!((document.getElementById('jerseyOrderSearch') || {}).value || '').trim()
+    || !!((document.getElementById('jerseyOrderTeamFilter') || {}).value || '')
+    || !!((document.getElementById('jerseyOrderKitFilter') || {}).value || '')
+    || !!((document.getElementById('jerseyOrderSizeFilter') || {}).value || '');
 
   if (countEl) {
-    countEl.textContent = orders.length === 1 ? '1 order' : `${orders.length} orders`;
+    if (!allOrders.length) {
+      countEl.textContent = '0 orders';
+    } else if (filtered) {
+      countEl.textContent = `Showing ${orders.length} of ${allOrders.length} order${allOrders.length === 1 ? '' : 's'}`;
+    } else {
+      countEl.textContent = allOrders.length === 1 ? '1 order' : `${allOrders.length} orders`;
+    }
   }
 
   if (thead) {
@@ -231,8 +311,13 @@ function renderJerseyOrders() {
     </tr>`;
   }
 
-  if (!orders.length) {
+  if (!allOrders.length) {
     tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">No jersey orders yet.</td></tr>`;
+    return;
+  }
+
+  if (!orders.length) {
+    tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">No orders match these filters.</td></tr>`;
     return;
   }
 
