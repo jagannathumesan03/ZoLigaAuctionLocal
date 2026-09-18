@@ -84,7 +84,8 @@ def list_teams_public():
     with db_cursor() as cur:
         cur.execute(
             """
-            SELECT id, name, logo_url, jersey_front_url, jersey_back_url, shorts_url
+            SELECT id, name, logo_url, jersey_front_url, jersey_back_url, shorts_url,
+                   away_jersey_front_url, away_jersey_back_url, away_shorts_url
             FROM teams
             ORDER BY name
             """
@@ -113,21 +114,33 @@ def create_team(
     jersey_front: Optional[UploadFile] = File(None),
     jersey_back: Optional[UploadFile] = File(None),
     shorts: Optional[UploadFile] = File(None),
+    away_jersey_front: Optional[UploadFile] = File(None),
+    away_jersey_back: Optional[UploadFile] = File(None),
+    away_shorts: Optional[UploadFile] = File(None),
     _=Depends(require_admin),
 ):
     logo_url = save_team_upload(logo) or ""
     jersey_front_url = save_team_upload(jersey_front) or ""
     jersey_back_url = save_team_upload(jersey_back) or ""
     shorts_url = save_team_upload(shorts) or ""
+    away_jersey_front_url = save_team_upload(away_jersey_front) or ""
+    away_jersey_back_url = save_team_upload(away_jersey_back) or ""
+    away_shorts_url = save_team_upload(away_shorts) or ""
 
     with db_cursor() as cur:
         try:
             password_hash = hash_team_password(owner_password) if owner_password.strip() else ""
             cur.execute(
                 """INSERT INTO teams
-                   (name, logo_url, jersey_front_url, jersey_back_url, shorts_url, purse_total, purse_remaining, slots_max, owner_password)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (name, logo_url, jersey_front_url, jersey_back_url, shorts_url, purse_total, purse_total, slots_max, password_hash),
+                   (name, logo_url, jersey_front_url, jersey_back_url, shorts_url,
+                    away_jersey_front_url, away_jersey_back_url, away_shorts_url,
+                    purse_total, purse_remaining, slots_max, owner_password)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    name, logo_url, jersey_front_url, jersey_back_url, shorts_url,
+                    away_jersey_front_url, away_jersey_back_url, away_shorts_url,
+                    purse_total, purse_total, slots_max, password_hash,
+                ),
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Could not create team: {e}")
@@ -148,6 +161,9 @@ def update_team(
     jersey_front: Optional[UploadFile] = File(None),
     jersey_back: Optional[UploadFile] = File(None),
     shorts: Optional[UploadFile] = File(None),
+    away_jersey_front: Optional[UploadFile] = File(None),
+    away_jersey_back: Optional[UploadFile] = File(None),
+    away_shorts: Optional[UploadFile] = File(None),
     _=Depends(require_admin),
 ):
     with db_cursor() as cur:
@@ -160,10 +176,16 @@ def update_team(
         spent = existing["purse_total"] - existing["purse_remaining"]
         new_remaining = max(purse_total - spent, 0)
 
+        def col(key: str) -> str:
+            return (existing[key] if key in existing.keys() else "") or ""
+
         logo_url = existing["logo_url"] or ""
-        jersey_front_url = (existing["jersey_front_url"] if "jersey_front_url" in existing.keys() else "") or ""
-        jersey_back_url = (existing["jersey_back_url"] if "jersey_back_url" in existing.keys() else "") or ""
-        shorts_url = (existing["shorts_url"] if "shorts_url" in existing.keys() else "") or ""
+        jersey_front_url = col("jersey_front_url")
+        jersey_back_url = col("jersey_back_url")
+        shorts_url = col("shorts_url")
+        away_jersey_front_url = col("away_jersey_front_url")
+        away_jersey_back_url = col("away_jersey_back_url")
+        away_shorts_url = col("away_shorts_url")
 
         new_logo = save_team_upload(logo)
         if new_logo:
@@ -177,22 +199,41 @@ def update_team(
         new_shorts = save_team_upload(shorts)
         if new_shorts:
             shorts_url = new_shorts
+        new_away_front = save_team_upload(away_jersey_front)
+        if new_away_front:
+            away_jersey_front_url = new_away_front
+        new_away_back = save_team_upload(away_jersey_back)
+        if new_away_back:
+            away_jersey_back_url = new_away_back
+        new_away_shorts = save_team_upload(away_shorts)
+        if new_away_shorts:
+            away_shorts_url = new_away_shorts
 
         if owner_password.strip():
             cur.execute(
                 """UPDATE teams
                    SET name=?, logo_url=?, jersey_front_url=?, jersey_back_url=?, shorts_url=?,
+                       away_jersey_front_url=?, away_jersey_back_url=?, away_shorts_url=?,
                        purse_total=?, purse_remaining=?, slots_max=?, owner_password=?
                    WHERE id=?""",
-                (name, logo_url, jersey_front_url, jersey_back_url, shorts_url, purse_total, new_remaining, slots_max, hash_team_password(owner_password), team_id),
+                (
+                    name, logo_url, jersey_front_url, jersey_back_url, shorts_url,
+                    away_jersey_front_url, away_jersey_back_url, away_shorts_url,
+                    purse_total, new_remaining, slots_max, hash_team_password(owner_password), team_id,
+                ),
             )
         else:
             cur.execute(
                 """UPDATE teams
                    SET name=?, logo_url=?, jersey_front_url=?, jersey_back_url=?, shorts_url=?,
+                       away_jersey_front_url=?, away_jersey_back_url=?, away_shorts_url=?,
                        purse_total=?, purse_remaining=?, slots_max=?
                    WHERE id=?""",
-                (name, logo_url, jersey_front_url, jersey_back_url, shorts_url, purse_total, new_remaining, slots_max, team_id),
+                (
+                    name, logo_url, jersey_front_url, jersey_back_url, shorts_url,
+                    away_jersey_front_url, away_jersey_back_url, away_shorts_url,
+                    purse_total, new_remaining, slots_max, team_id,
+                ),
             )
         cur.execute("SELECT * FROM teams WHERE id = ?", (team_id,))
         return team_with_squad(cur, cur.fetchone())

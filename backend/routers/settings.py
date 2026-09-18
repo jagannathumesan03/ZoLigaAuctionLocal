@@ -35,10 +35,11 @@ DEFAULT_JERSEY_FIELDS = {
     "player_name": {"enabled": True, "required": False},
     "jersey_number": {"enabled": True, "required": False},
     "size": {"enabled": True, "required": True},
+    "sleeve_length": {"enabled": True, "required": True},
     "custom": [],
-    "order": ["team", "player_name", "jersey_number", "size"],
+    "order": ["team", "player_name", "jersey_number", "size", "sleeve_length"],
 }
-JERSEY_FIELD_KEYS = ("team", "player_name", "jersey_number", "size")
+JERSEY_FIELD_KEYS = ("team", "player_name", "jersey_number", "size", "sleeve_length")
 
 
 class SettingsBody(BaseModel):

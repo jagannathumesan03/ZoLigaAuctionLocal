@@ -23,8 +23,9 @@ const DEFAULT_FIELDS = {
   player_name: { enabled: true, required: false },
   jersey_number: { enabled: true, required: false },
   size: { enabled: true, required: true },
+  sleeve_length: { enabled: true, required: true },
   custom: [],
-  order: ['team', 'player_name', 'jersey_number', 'size'],
+  order: ['team', 'player_name', 'jersey_number', 'size', 'sleeve_length'],
 };
 
 const state = {
@@ -43,6 +44,7 @@ const jerseyUi = {
   shortsSize: '',
   wantShorts: false,
   wantPrint: false,
+  kit: 'home',
   view: 'front',
   wired: false,
 };
@@ -143,7 +145,7 @@ function customFieldDefs() {
 function fieldOrderList() {
   const fields = state.jerseyFormFields || DEFAULT_FIELDS;
   const customKeys = customFieldDefs().map(c => `custom:${c.id}`);
-  const fallback = ['team', 'player_name', 'jersey_number', 'size'].concat(customKeys);
+  const fallback = ['team', 'player_name', 'jersey_number', 'size', 'sleeve_length'].concat(customKeys);
   const order = Array.isArray(fields.order) && fields.order.length ? fields.order.slice() : fallback.slice();
   fallback.forEach(key => {
     if (!order.includes(key)) order.push(key);
@@ -156,15 +158,21 @@ function applyJerseyFormFields() {
   const nameCfg = fieldConfig('player_name');
   const numberCfg = fieldConfig('jersey_number');
   const sizeCfg = fieldConfig('size');
+  const sleeveCfg = fieldConfig('sleeve_length');
 
   const blockTeam = $('#blockTeam');
   const blockPrinting = $('#blockPrinting');
   const blockSize = $('#blockSize');
   const nameWrap = $('#jerseyFieldName');
   const numberWrap = $('#jerseyFieldNumber');
+  const sizeWrap = $('#jerseyFieldSize');
+  const sleeveWrap = $('#jerseyFieldSleeve');
 
   if (blockTeam) blockTeam.style.display = teamCfg.enabled ? '' : 'none';
-  if (blockSize) blockSize.style.display = sizeCfg.enabled ? '' : 'none';
+  const showSizeBlock = sizeCfg.enabled || sleeveCfg.enabled;
+  if (blockSize) blockSize.style.display = showSizeBlock ? '' : 'none';
+  if (sizeWrap) sizeWrap.style.display = sizeCfg.enabled ? '' : 'none';
+  if (sleeveWrap) sleeveWrap.style.display = sleeveCfg.enabled ? '' : 'none';
 
   const showPrint = nameCfg.enabled || numberCfg.enabled;
   if (blockPrinting) blockPrinting.style.display = showPrint ? '' : 'none';
@@ -173,6 +181,8 @@ function applyJerseyFormFields() {
 
   const nameInput = $('#jerseyPlayerName');
   const numberInput = $('#jerseyNumber');
+  const sizeSelect = $('#jerseySize');
+  const sleeveSelect = $('#jerseySleeve');
   if (nameInput) {
     if (nameCfg.required) nameInput.setAttribute('aria-required', 'true');
     else nameInput.removeAttribute('aria-required');
@@ -180,6 +190,14 @@ function applyJerseyFormFields() {
   if (numberInput) {
     if (numberCfg.required) numberInput.setAttribute('aria-required', 'true');
     else numberInput.removeAttribute('aria-required');
+  }
+  if (sizeSelect) {
+    if (sizeCfg.required) sizeSelect.setAttribute('aria-required', 'true');
+    else sizeSelect.removeAttribute('aria-required');
+  }
+  if (sleeveSelect) {
+    if (sleeveCfg.required) sleeveSelect.setAttribute('aria-required', 'true');
+    else sleeveSelect.removeAttribute('aria-required');
   }
 
   renderCustomJerseyFields();
@@ -265,14 +283,15 @@ function selectedSize() {
 }
 
 function selectedSleeveLength() {
+  if (!fieldConfig('sleeve_length').enabled) return '';
   const select = $('#jerseySleeve');
   return jerseyUi.sleeveLength || (select && select.value) || '';
 }
 
 function selectedShortsSize() {
   if (!jerseyUi.wantShorts) return '';
-  const checked = document.querySelector('input[name="ssize"]:checked');
-  return jerseyUi.shortsSize || (checked && checked.value) || '';
+  const select = $('#shortsSize');
+  return jerseyUi.shortsSize || (select && select.value) || '';
 }
 
 function syncShortsCollapse(opts = {}) {
@@ -282,7 +301,8 @@ function syncShortsCollapse(opts = {}) {
   if (fields) fields.classList.toggle('open', jerseyUi.wantShorts);
   if (!jerseyUi.wantShorts) {
     jerseyUi.shortsSize = '';
-    $$('input[name="ssize"]').forEach(el => { el.checked = false; });
+    const select = $('#shortsSize');
+    if (select) select.value = '';
     showErr('errShortsSize', false);
   } else if (opts.focusPreview) {
     showView('shorts');
@@ -344,6 +364,9 @@ function setupJerseyForm() {
   const teamTrigger = $('#jerseyTeamSelect');
   const sizeSelect = $('#jerseySize');
   const sleeveSelect = $('#jerseySleeve');
+  const shortsSizeSelect = $('#shortsSize');
+  const kitHomeBtn = $('#kitHomeBtn');
+  const kitAwayBtn = $('#kitAwayBtn');
 
   if (form) {
     form.addEventListener('submit', (e) => {
@@ -385,6 +408,27 @@ function setupJerseyForm() {
       updateSummary();
     });
   }
+
+  if (shortsSizeSelect) {
+    shortsSizeSelect.addEventListener('change', () => {
+      jerseyUi.shortsSize = shortsSizeSelect.value;
+      shortsSizeSelect.setAttribute('aria-invalid', shortsSizeSelect.value ? 'false' : 'true');
+      showErr('errShortsSize', false);
+      updateSummary();
+    });
+  }
+
+  [kitHomeBtn, kitAwayBtn].forEach(btn => {
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const next = btn.dataset.kit === 'away' ? 'away' : 'home';
+      if (jerseyUi.kit === next) return;
+      jerseyUi.kit = next;
+      syncKitVariantButtons();
+      paintJerseyPreview();
+      updateSummary();
+    });
+  });
 
   if (nameInput) nameInput.addEventListener('input', () => {
     if (jerseyUi.wantPrint) showView('back');
@@ -484,6 +528,7 @@ function validateOrder() {
   const nameCfg = fieldConfig('player_name');
   const numberCfg = fieldConfig('jersey_number');
   const sizeCfg = fieldConfig('size');
+  const sleeveCfg = fieldConfig('sleeve_length');
   const teamId = selectedTeamId();
   const playerName = playerNameValue();
   const jerseyNumber = jerseyNumberValue();
@@ -503,7 +548,7 @@ function validateOrder() {
     if (sizeSelect) sizeSelect.setAttribute('aria-invalid', 'true');
     ok = false;
   }
-  if (!sleeveLength) {
+  if (sleeveCfg.enabled && sleeveCfg.required && !sleeveLength) {
     showErr('errSleeve', true);
     const sleeveSelect = $('#jerseySleeve');
     if (sleeveSelect) sleeveSelect.setAttribute('aria-invalid', 'true');
@@ -580,6 +625,7 @@ function openJerseyConfirm() {
     jersey_number: jerseyNumber,
     size,
     sleeve_length: sleeveLength,
+    kit_type: jerseyUi.kit === 'away' ? 'away' : 'home',
     want_print: !!jerseyUi.wantPrint,
     want_shorts: !!jerseyUi.wantShorts,
     shorts_size: shortsSize,
@@ -587,6 +633,9 @@ function openJerseyConfirm() {
   };
 
   const lines = [`<strong>${escapeHtml(teamName)}</strong>`];
+  if (teamHasAwayKit(team)) {
+    lines.push(`Kit: <strong>${jerseyUi.kit === 'away' ? 'Away' : 'Home'}</strong>`);
+  }
   if (nameCfg.enabled || numberCfg.enabled) {
     if (jerseyUi.wantPrint) {
       if (nameCfg.enabled) {
@@ -605,7 +654,9 @@ function openJerseyConfirm() {
   } else {
     lines.push(`Jersey: <strong>${money(pricing.jersey)}</strong>`);
   }
-  lines.push(`Sleeve: <strong>${escapeHtml(sleeveLength)}</strong>`);
+  if (fieldConfig('sleeve_length').enabled) {
+    lines.push(`Sleeve: ${sleeveLength ? `<strong>${escapeHtml(sleeveLength)}</strong>` : '<em>none</em>'}`);
+  }
   if (pricing.withShorts) {
     lines.push(`Shorts${shortsSize ? ` size ${escapeHtml(shortsSize)}` : ''}: <strong>${money(pricing.shorts)}</strong>`);
     lines.push(`Total: <strong>${money(pricing.total)}</strong>`);
@@ -683,8 +734,13 @@ function showOrderDone(order) {
     }
   }
   const withShorts = !!(order.want_shorts || order.shorts_size);
+  if (order.kit_type === 'away' || order.kit_type === 'home') {
+    items.push(['Kit', order.kit_type === 'away' ? 'Away' : 'Home']);
+  }
   items.push(['Jersey', `${order.size ? `Size ${order.size} · ` : ''}${money(PRICE.jersey)}`]);
-  items.push(['Sleeve', order.sleeve_length || '—']);
+  if (fieldConfig('sleeve_length').enabled) {
+    items.push(['Sleeve', order.sleeve_length || '—']);
+  }
   if (withShorts) {
     items.push(['Shorts', `${order.shorts_size ? `Size ${order.shorts_size} · ` : ''}${money(PRICE.shorts)}`]);
     items.push(['Total', money(PRICE.jersey + PRICE.shorts)]);
@@ -723,12 +779,15 @@ function resetForAnotherOrder() {
   jerseyUi.shortsSize = '';
   jerseyUi.wantShorts = false;
   jerseyUi.wantPrint = false;
+  jerseyUi.kit = 'home';
   const wantShorts = $('#wantShorts');
   if (wantShorts) wantShorts.checked = false;
   const wantPrint = $('#wantPrint');
   if (wantPrint) wantPrint.checked = false;
   const sleeveSelect = $('#jerseySleeve');
   if (sleeveSelect) sleeveSelect.value = '';
+  const shortsSizeSelect = $('#shortsSize');
+  if (shortsSizeSelect) shortsSizeSelect.value = '';
   const shortsFields = $('#shortsFields');
   if (shortsFields) shortsFields.classList.remove('open');
   const printFields = $('#printFields');
@@ -791,13 +850,15 @@ function openTeamSelect() {
 
 function chooseTeam(teamId) {
   jerseyUi.teamId = teamId ? String(teamId) : '';
+  jerseyUi.kit = 'home';
   const team = state.teams.find(t => String(t.id) === String(jerseyUi.teamId));
   setTeamSelectValue(team || null);
   showErr('errTeam', false);
   closeTeamSelect();
   paintJerseyPreview();
   updateSummary();
-  if (team && team.jersey_back_url && (playerNameValue() || jerseyNumberValue())) {
+  const urls = teamKitUrls(team, jerseyUi.kit);
+  if (team && urls.back && (playerNameValue() || jerseyNumberValue())) {
     showView('back');
   } else {
     showView('front');
@@ -810,7 +871,7 @@ function renderTeamPicker() {
   if (!menu || !trigger) return;
 
   const signature = state.teams.map(t =>
-    `${t.id}:${t.logo_url || ''}:${t.jersey_front_url || ''}:${t.jersey_back_url || ''}:${t.shorts_url || ''}:${t.name}`
+    `${t.id}:${t.logo_url || ''}:${t.jersey_front_url || ''}:${t.jersey_back_url || ''}:${t.shorts_url || ''}:${t.away_jersey_front_url || ''}:${t.away_jersey_back_url || ''}:${t.away_shorts_url || ''}:${t.name}`
   ).join('|');
   if (menu.dataset.teamSignature === signature) {
     syncTeamSelection();
@@ -892,42 +953,73 @@ function syncSizeSelection() {
 }
 
 function renderShortsSizeChips() {
-  const wrap = $('#shortsSizeChips');
-  if (!wrap) return;
+  const select = $('#shortsSize');
+  if (!select) return;
   const sizes = Array.isArray(state.shortsSizes) && state.shortsSizes.length
     ? state.shortsSizes
     : DEFAULT_SHORTS_SIZES;
   const signature = sizes.join('|');
-  if (wrap.dataset.sizeSignature === signature) {
+  if (select.dataset.sizeSignature === signature) {
     syncShortsSizeSelection();
     return;
   }
 
-  wrap.innerHTML = sizes.map(s => `
-    <label class="chip">
-      <input type="radio" name="ssize" value="${escapeHtml(s)}">
-      <span>${escapeHtml(s)}</span>
-    </label>
-  `).join('');
-
-  wrap.querySelectorAll('input[name="ssize"]').forEach(input => {
-    input.addEventListener('change', () => {
-      jerseyUi.shortsSize = input.value;
-      showErr('errShortsSize', false);
-      updateSummary();
-    });
-  });
-
-  wrap.dataset.sizeSignature = signature;
+  select.innerHTML = `<option value="">Select size…</option>${sizes.map(s =>
+    `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`
+  ).join('')}`;
+  select.dataset.sizeSignature = signature;
   syncShortsSizeSelection();
 }
 
 function syncShortsSizeSelection() {
-  if (!jerseyUi.shortsSize) return;
-  const input = Array.from(document.querySelectorAll('input[name="ssize"]'))
-    .find(el => el.value === String(jerseyUi.shortsSize));
-  if (input) input.checked = true;
-  else jerseyUi.shortsSize = '';
+  const select = $('#shortsSize');
+  if (!select) return;
+  const sizes = Array.isArray(state.shortsSizes) && state.shortsSizes.length
+    ? state.shortsSizes
+    : DEFAULT_SHORTS_SIZES;
+  if (jerseyUi.shortsSize && sizes.includes(jerseyUi.shortsSize)) {
+    select.value = jerseyUi.shortsSize;
+  } else {
+    jerseyUi.shortsSize = '';
+    select.value = '';
+  }
+}
+
+function teamHasAwayKit(team) {
+  if (!team) return false;
+  return !!(team.away_jersey_front_url || team.away_jersey_back_url || team.away_shorts_url);
+}
+
+function teamKitUrls(team, kit) {
+  if (!team) return { front: '', back: '', shorts: '' };
+  if (kit === 'away' && teamHasAwayKit(team)) {
+    return {
+      front: team.away_jersey_front_url || '',
+      back: team.away_jersey_back_url || '',
+      shorts: team.away_shorts_url || '',
+    };
+  }
+  return {
+    front: team.jersey_front_url || '',
+    back: team.jersey_back_url || '',
+    shorts: team.shorts_url || '',
+  };
+}
+
+function syncKitVariantButtons() {
+  const wrap = $('#kitVariant');
+  const homeBtn = $('#kitHomeBtn');
+  const awayBtn = $('#kitAwayBtn');
+  const team = state.teams.find(t => String(t.id) === String(selectedTeamId()));
+  const show = !!(team && teamHasAwayKit(team));
+  if (wrap) wrap.hidden = !show;
+  if (!show) {
+    jerseyUi.kit = 'home';
+  } else if (jerseyUi.kit !== 'away') {
+    jerseyUi.kit = 'home';
+  }
+  if (homeBtn) homeBtn.setAttribute('aria-pressed', jerseyUi.kit === 'home' ? 'true' : 'false');
+  if (awayBtn) awayBtn.setAttribute('aria-pressed', jerseyUi.kit === 'away' ? 'true' : 'false');
 }
 
 function showView(view) {
@@ -963,6 +1055,7 @@ function paintJerseyPreview() {
     viewBack.innerHTML = '';
     viewShorts.innerHTML = '';
     [tabFront, tabBack, tabShorts].forEach(tab => { if (tab) tab.disabled = true; });
+    syncKitVariantButtons();
     updateStageNote();
     return;
   }
@@ -971,33 +1064,34 @@ function paintJerseyPreview() {
   if (!team) {
     if (kitName) kitName.textContent = 'Pick a team to see its kit';
     if (stageEmpty) stageEmpty.style.display = '';
+    syncKitVariantButtons();
     return;
   }
 
-  if (kitName) kitName.textContent = `${team.name} kit`;
+  syncKitVariantButtons();
+  const kitLabel = jerseyUi.kit === 'away' ? 'away kit' : 'kit';
+  if (kitName) kitName.textContent = `${team.name} ${kitLabel}`;
   if (stageEmpty) stageEmpty.style.display = 'none';
 
-  const front = team.jersey_front_url || '';
-  const back = team.jersey_back_url || '';
-  const shorts = team.shorts_url || '';
+  const { front, back, shorts } = teamKitUrls(team, jerseyUi.kit);
   const name = playerNameValue().toUpperCase();
   const number = jerseyNumberValue();
-  const paintKey = `kit|${team.id}|${front}|${back}|${shorts}`;
+  const paintKey = `kit|${team.id}|${jerseyUi.kit}|${front}|${back}|${shorts}`;
 
   if (viewFront.dataset.paintKey !== paintKey) {
     viewFront.innerHTML = front
-      ? `<div class="jersey-image-wrap"><img src="${escapeHtml(front)}" alt="${escapeHtml(team.name)} jersey front"></div>`
-      : `<p class="stage-empty">No front kit uploaded.</p>`;
+      ? `<div class="jersey-image-wrap"><img src="${escapeHtml(front)}" alt="${escapeHtml(team.name)} ${jerseyUi.kit} jersey front"></div>`
+      : `<p class="stage-empty">No ${jerseyUi.kit} front kit uploaded.</p>`;
     viewFront.dataset.paintKey = paintKey;
 
     if (back) {
       viewBack.innerHTML = `
         <div class="jersey-image-wrap jersey-image-wrap-back">
-          <img src="${escapeHtml(back)}" alt="${escapeHtml(team.name)} jersey back">
+          <img src="${escapeHtml(back)}" alt="${escapeHtml(team.name)} ${jerseyUi.kit} jersey back">
           <div class="jersey-back-print" aria-hidden="true">
             <svg class="jersey-name-arch" viewBox="0 0 220 64" preserveAspectRatio="xMidYMid meet">
               <defs>
-                <path id="jerseyNameArc-${team.id}" d="M 12 48 Q 110 8 208 48" fill="none"></path>
+                <path id="jerseyNameArc-${team.id}" d="M 12 52 Q 110 22 208 52" fill="none"></path>
               </defs>
               <text class="jersey-name-arch-text">
                 <textPath href="#jerseyNameArc-${team.id}" startOffset="50%" text-anchor="middle">
@@ -1009,13 +1103,13 @@ function paintJerseyPreview() {
           </div>
         </div>`;
     } else {
-      viewBack.innerHTML = `<p class="stage-empty">No back kit uploaded.</p>`;
+      viewBack.innerHTML = `<p class="stage-empty">No ${jerseyUi.kit} back kit uploaded.</p>`;
     }
     viewBack.dataset.paintKey = paintKey;
 
     viewShorts.innerHTML = shorts
-      ? `<div class="jersey-image-wrap jersey-image-wrap-shorts"><img src="${escapeHtml(shorts)}" alt="${escapeHtml(team.name)} shorts"></div>`
-      : `<p class="stage-empty">No shorts uploaded.</p>`;
+      ? `<div class="jersey-image-wrap jersey-image-wrap-shorts"><img src="${escapeHtml(shorts)}" alt="${escapeHtml(team.name)} ${jerseyUi.kit} shorts"></div>`
+      : `<p class="stage-empty">No ${jerseyUi.kit} shorts uploaded.</p>`;
     viewShorts.dataset.paintKey = paintKey;
   } else {
     updateJerseyOverlays();
@@ -1032,7 +1126,7 @@ function paintJerseyPreview() {
   if (!front && !back && !shorts) {
     if (stageEmpty) {
       stageEmpty.style.display = '';
-      stageEmpty.textContent = `No kit uploaded yet for ${team.name}.`;
+      stageEmpty.textContent = `No ${jerseyUi.kit} kit uploaded yet for ${team.name}.`;
     }
   }
   showView(view);
@@ -1088,6 +1182,9 @@ function updateSummary() {
   if (fieldConfig('team').enabled) {
     rows.push(['Team', team ? team.name : '—', false]);
   }
+  if (team && teamHasAwayKit(team)) {
+    rows.push(['Kit', jerseyUi.kit === 'away' ? 'Away' : 'Home', false]);
+  }
   if (fieldConfig('player_name').enabled || fieldConfig('jersey_number').enabled) {
     if (jerseyUi.wantPrint) {
       if (fieldConfig('player_name').enabled) {
@@ -1106,7 +1203,9 @@ function updateSummary() {
     money(pricing.jersey),
     true,
   ]);
-  rows.push(['Sleeve', selectedSleeveLength() || '—', false]);
+  if (fieldConfig('sleeve_length').enabled) {
+    rows.push(['Sleeve', selectedSleeveLength() || '—', false]);
+  }
   if (pricing.withShorts) {
     rows.push([
       shortsSize ? `Shorts, size ${shortsSize}` : 'Shorts',

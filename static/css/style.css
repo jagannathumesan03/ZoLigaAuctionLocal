@@ -1872,7 +1872,7 @@ h1, h2, h3 { letter-spacing: 0; }
 .jersey-name-arch {
   position: absolute;
   left: 50%;
-  top: 16%;
+  top: 24%;
   width: 70%;
   height: auto;
   transform: translateX(-50%);
@@ -1902,7 +1902,7 @@ h1, h2, h3 { letter-spacing: 0; }
   pointer-events: none;
 }
 .jersey-overlay-number {
-  top: 36%;
+  top: 40%;
   font-size: clamp(3.4rem, 14vw, 5.6rem);
   line-height: 0.9;
   color: #fff;

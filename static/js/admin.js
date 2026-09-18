@@ -13,8 +13,9 @@ let state = {
     player_name: { enabled: true, required: false },
     jersey_number: { enabled: true, required: false },
     size: { enabled: true, required: true },
+    sleeve_length: { enabled: true, required: true },
     custom: [],
-    order: ['team', 'player_name', 'jersey_number', 'size'],
+    order: ['team', 'player_name', 'jersey_number', 'size', 'sleeve_length'],
   },
   startingAuction: false,
   draftBidAmount: null,
@@ -209,7 +210,7 @@ function renderJerseyOrders() {
   if (!tbody) return;
   const orders = state.jerseyOrders || [];
   const customCols = jerseyCustomColumns();
-  const colCount = 8 + customCols.length;
+  const colCount = 9 + customCols.length;
 
   if (countEl) {
     countEl.textContent = orders.length === 1 ? '1 order' : `${orders.length} orders`;
@@ -219,6 +220,7 @@ function renderJerseyOrders() {
     thead.innerHTML = `<tr>
       <th>When</th>
       <th>Team</th>
+      <th>Kit</th>
       <th>Name</th>
       <th>Number</th>
       <th>Jersey</th>
@@ -248,6 +250,7 @@ function renderJerseyOrders() {
           ${escapeHtml(o.team_name || 'Team')}
         </span>
       </td>
+      <td>${escapeHtml((o.kit_type || 'home') === 'away' ? 'Away' : 'Home')}</td>
       <td>${escapeHtml(o.player_name || '—')}</td>
       <td>${escapeHtml(o.jersey_number || '—')}</td>
       <td><strong>${escapeHtml(o.size || '—')}</strong></td>
@@ -302,7 +305,7 @@ function fillSettingsForm() {
 function fillJerseyFormFieldsConfig() {
   const fields = state.jerseyFormFields || {};
   const customById = Object.fromEntries((fields.custom || []).map(c => [c.id, c]));
-  const defaultOrder = ['team', 'player_name', 'jersey_number', 'size']
+  const defaultOrder = ['team', 'player_name', 'jersey_number', 'size', 'sleeve_length']
     .concat((fields.custom || []).map(c => `custom:${c.id}`));
   const order = Array.isArray(fields.order) && fields.order.length ? fields.order.slice() : defaultOrder;
   defaultOrder.forEach(key => {
@@ -314,6 +317,7 @@ function fillJerseyFormFieldsConfig() {
     player_name: { label: 'Player name', locked: false },
     jersey_number: { label: 'Number', locked: false },
     size: { label: 'Size', locked: false },
+    sleeve_length: { label: 'Sleeve length', locked: false },
   };
 
   const wrap = document.getElementById('jerseyFieldsSortable');
@@ -454,6 +458,7 @@ function readJerseyFormFieldsFromDom() {
     player_name: { enabled: true, required: false },
     jersey_number: { enabled: true, required: false },
     size: { enabled: true, required: true },
+    sleeve_length: { enabled: true, required: true },
   };
   const custom = [];
   const order = [];
@@ -1832,6 +1837,12 @@ async function submitTeamForm(e) {
   if (jerseyBack) fd.append('jersey_back', jerseyBack);
   const shorts = document.getElementById('teamShorts').files[0];
   if (shorts) fd.append('shorts', shorts);
+  const awayJerseyFront = document.getElementById('teamAwayJerseyFront').files[0];
+  if (awayJerseyFront) fd.append('away_jersey_front', awayJerseyFront);
+  const awayJerseyBack = document.getElementById('teamAwayJerseyBack').files[0];
+  if (awayJerseyBack) fd.append('away_jersey_back', awayJerseyBack);
+  const awayShorts = document.getElementById('teamAwayShorts').files[0];
+  if (awayShorts) fd.append('away_shorts', awayShorts);
 
   const maxBytes = 8 * 1024 * 1024;
   for (const [label, file] of [
@@ -1839,6 +1850,9 @@ async function submitTeamForm(e) {
     ['Jersey front', jerseyFront],
     ['Jersey back', jerseyBack],
     ['Shorts', shorts],
+    ['Away shirt front', awayJerseyFront],
+    ['Away shirt back', awayJerseyBack],
+    ['Away shorts', awayShorts],
   ]) {
     if (file && file.size > maxBytes) {
       toast(`${label} is too large (max ~8 MB). Compress it and try again.`, true);

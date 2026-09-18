@@ -361,11 +361,18 @@
         <div class="field"><label>Max Slots</label><input type="number" id="teamSlots" min="1" value="8" required></div>
       </div>
       <div class="field"><label>Logo</label><input type="file" id="teamLogo" accept="image/*"></div>
+      <p class="muted" style="margin:0 0 8px;">Home kit</p>
       <div class="row">
         <div class="field"><label>Jersey front</label><input type="file" id="teamJerseyFront" accept="image/*"></div>
         <div class="field"><label>Jersey back</label><input type="file" id="teamJerseyBack" accept="image/*"></div>
       </div>
       <div class="field"><label>Shorts</label><input type="file" id="teamShorts" accept="image/*"></div>
+      <p class="muted" style="margin:12px 0 8px;">Away kit <span class="muted">(optional)</span></p>
+      <div class="row">
+        <div class="field"><label>Away shirt front</label><input type="file" id="teamAwayJerseyFront" accept="image/*"></div>
+        <div class="field"><label>Away shirt back</label><input type="file" id="teamAwayJerseyBack" accept="image/*"></div>
+      </div>
+      <div class="field"><label>Away shorts</label><input type="file" id="teamAwayShorts" accept="image/*"></div>
       <div class="field">
         <label>Team login password</label>
         <input type="password" id="teamOwnerPassword" autocomplete="new-password" placeholder="Leave blank to keep current">
@@ -405,6 +412,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=sleeve-1"></script>
+<script src="/static/js/admin.js?v=away-kit-1"></script>
 </body>
 </html>

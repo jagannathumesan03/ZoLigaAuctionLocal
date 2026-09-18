@@ -269,7 +269,7 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
 .jersey-kit-page .jersey-name-arch {
   position: absolute;
   left: 50%;
-  top: 16%;
+  top: 24%;
   width: 70%;
   height: auto;
   transform: translateX(-50%);
@@ -299,7 +299,7 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
   pointer-events: none;
 }
 .jersey-kit-page .jersey-overlay-number {
-  top: 36%;
+  top: 40%;
   font-size: clamp(3.4rem, 14vw, 5.6rem);
   line-height: 0.9;
   text-shadow:
@@ -332,6 +332,42 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
 .jersey-kit-page .tabs button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+.jersey-kit-page .kit-variant {
+  display: inline-flex;
+  gap: 0;
+  margin: 0 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.jersey-kit-page .kit-variant[hidden] {
+  display: none !important;
+}
+.jersey-kit-page .kit-variant-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 7px 16px;
+  cursor: pointer;
+  min-width: 72px;
+}
+.jersey-kit-page .kit-variant-btn + .kit-variant-btn {
+  border-left: 1px solid var(--line-strong);
+}
+.jersey-kit-page .kit-variant-btn[aria-pressed="true"] {
+  background: var(--navy);
+  color: #fff;
+}
+html[data-theme="dark"] .jersey-kit-page .kit-variant-btn[aria-pressed="true"] {
+  background: var(--gold);
+  color: #0a1428;
 }
 .jersey-kit-page .stage-note {
   color: var(--muted);

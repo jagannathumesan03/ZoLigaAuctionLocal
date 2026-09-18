@@ -24,6 +24,7 @@ class JerseyOrderBody(BaseModel):
     size: str = ""
     sleeve_length: str = ""
     shorts_size: str = ""
+    kit_type: str = "home"
     want_shorts: bool = False
     want_print: bool = False
     extra_fields: Optional[dict] = None
@@ -128,7 +129,7 @@ def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    header = ["when", "team", "name", "number", "size", "sleeve_length", "shorts_size"] + [
+    header = ["when", "team", "kit", "name", "number", "size", "sleeve_length", "shorts_size"] + [
         label_by_id.get(cid, cid) for cid in custom_ids
     ]
     writer.writerow(header)
@@ -137,6 +138,7 @@ def export_jersey_orders_csv(request: Request, _=Depends(require_admin)):
         row = [
             o.get("created_at") or "",
             o.get("team_name") or "",
+            o.get("kit_type") or "home",
             o.get("player_name") or "",
             o.get("jersey_number") or "",
             o.get("size") or "",
@@ -201,9 +203,14 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
                 if not size:
                     raise HTTPException(status_code=400, detail="Choose a valid jersey size")
 
-        sleeve_length = _canonical_sleeve(body.sleeve_length or "")
-        if not sleeve_length:
-            raise HTTPException(status_code=400, detail="Choose sleeve length")
+        sleeve_length = ""
+        sleeve_cfg = fields.get("sleeve_length") or {"enabled": True, "required": True}
+        if sleeve_cfg.get("enabled", True):
+            sleeve_length = _canonical_sleeve(body.sleeve_length or "") or ""
+            if sleeve_cfg.get("required", True) and not sleeve_length:
+                raise HTTPException(status_code=400, detail="Choose sleeve length")
+            if (body.sleeve_length or "").strip() and not sleeve_length:
+                raise HTTPException(status_code=400, detail="Choose a valid sleeve length")
 
         shorts_size = ""
         if want_shorts:
@@ -217,6 +224,10 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
         if not body.team_id:
             raise HTTPException(status_code=400, detail="Select a team first")
 
+        kit_type = (body.kit_type or "home").strip().lower()
+        if kit_type not in ("home", "away"):
+            kit_type = "home"
+
         extra = {}
         for custom in fields.get("custom") or []:
             if not custom.get("enabled"):
@@ -229,16 +240,32 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
             if value:
                 extra[field_id] = value
 
-        cur.execute("SELECT id FROM teams WHERE id = ?", (body.team_id,))
-        if not cur.fetchone():
+        cur.execute(
+            """
+            SELECT id, away_jersey_front_url, away_jersey_back_url, away_shorts_url
+            FROM teams WHERE id = ?
+            """,
+            (body.team_id,),
+        )
+        team_row = cur.fetchone()
+        if not team_row:
             raise HTTPException(status_code=404, detail="Team not found")
+        if kit_type == "away":
+            has_away = bool(
+                (team_row["away_jersey_front_url"] if "away_jersey_front_url" in team_row.keys() else "")
+                or (team_row["away_jersey_back_url"] if "away_jersey_back_url" in team_row.keys() else "")
+                or (team_row["away_shorts_url"] if "away_shorts_url" in team_row.keys() else "")
+            )
+            if not has_away:
+                kit_type = "home"
+
         cur.execute(
             """
             INSERT INTO jersey_orders
-              (team_id, player_name, jersey_number, size, sleeve_length, shorts_size, extra_fields, submitted_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              (team_id, player_name, jersey_number, size, sleeve_length, shorts_size, kit_type, extra_fields, submitted_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (body.team_id, name, number, size, sleeve_length, shorts_size, json.dumps(extra), submitted_by),
+            (body.team_id, name, number, size, sleeve_length, shorts_size, kit_type, json.dumps(extra), submitted_by),
         )
         order = _order_row(cur, cur.lastrowid)
 

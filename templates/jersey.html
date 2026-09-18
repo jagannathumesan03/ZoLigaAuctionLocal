@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/jersey-kit.css?v=kit-team-logo-1">
+<link rel="stylesheet" href="/static/css/jersey-kit.css?v=kit-away-1">
 </head>
 <body class="jersey-kit-page">
 
@@ -46,6 +46,10 @@
 
   <section class="stage" aria-label="Kit preview">
     <p class="kit-name" id="kitName">Pick a team to see its kit</p>
+    <div class="kit-variant" id="kitVariant" hidden role="group" aria-label="Kit style">
+      <button type="button" class="kit-variant-btn" data-kit="home" id="kitHomeBtn" aria-pressed="true">Home</button>
+      <button type="button" class="kit-variant-btn" data-kit="away" id="kitAwayBtn" aria-pressed="false">Away</button>
+    </div>
     <div class="stage-art" id="stageArt">
       <div class="stage-empty" id="stageEmpty">Select a team to preview front, back, and shorts.</div>
       <div class="stage-view" id="view-front" data-view="front"></div>
@@ -147,10 +151,14 @@
         <p class="hint">Optional. Matching shorts with an elastic drawcord waist.</p>
         <div class="collapse" id="shortsFields">
           <div class="block-head" style="margin-bottom:8px">
-            <label style="margin:0">Shorts size</label>
+            <label for="shortsSize" style="margin:0">Shorts size</label>
             <button class="link-btn" type="button" id="shortsSizeChartLink" data-chart="shorts">Size chart</button>
           </div>
-          <div class="sizes" id="shortsSizeChips" role="radiogroup" aria-label="Shorts size"></div>
+          <div class="field">
+            <select id="shortsSize" aria-label="Shorts size">
+              <option value="">Select size…</option>
+            </select>
+          </div>
           <p class="err" id="errShortsSize">Choose a shorts size.</p>
         </div>
       </section>
@@ -207,6 +215,6 @@
   </div>
 </dialog>
 
-<script src="/static/js/jersey.js?v=kit-team-logo-1"></script>
+<script src="/static/js/jersey.js?v=kit-away-1"></script>
 </body>
 </html>

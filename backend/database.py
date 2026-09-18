@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS teams (
     jersey_front_url TEXT DEFAULT '',
     jersey_back_url TEXT DEFAULT '',
     shorts_url TEXT DEFAULT '',
+    away_jersey_front_url TEXT DEFAULT '',
+    away_jersey_back_url TEXT DEFAULT '',
+    away_shorts_url TEXT DEFAULT '',
     purse_total INTEGER NOT NULL DEFAULT 0,
     purse_remaining INTEGER NOT NULL DEFAULT 0,
     slots_max INTEGER NOT NULL DEFAULT 8,
@@ -71,6 +74,7 @@ CREATE TABLE IF NOT EXISTS jersey_orders (
     size TEXT NOT NULL DEFAULT '',
     sleeve_length TEXT NOT NULL DEFAULT '',
     shorts_size TEXT NOT NULL DEFAULT '',
+    kit_type TEXT NOT NULL DEFAULT 'home',
     extra_fields TEXT NOT NULL DEFAULT '{}',
     submitted_by TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
@@ -203,6 +207,12 @@ def _migrate(cur):
         cur.execute("ALTER TABLE teams ADD COLUMN jersey_back_url TEXT DEFAULT ''")
     if "shorts_url" not in team_cols:
         cur.execute("ALTER TABLE teams ADD COLUMN shorts_url TEXT DEFAULT ''")
+    if "away_jersey_front_url" not in team_cols:
+        cur.execute("ALTER TABLE teams ADD COLUMN away_jersey_front_url TEXT DEFAULT ''")
+    if "away_jersey_back_url" not in team_cols:
+        cur.execute("ALTER TABLE teams ADD COLUMN away_jersey_back_url TEXT DEFAULT ''")
+    if "away_shorts_url" not in team_cols:
+        cur.execute("ALTER TABLE teams ADD COLUMN away_shorts_url TEXT DEFAULT ''")
 
     cur.execute("PRAGMA table_info(jersey_orders)")
     jersey_order_cols = {row[1] for row in cur.fetchall()}
@@ -212,6 +222,8 @@ def _migrate(cur):
         cur.execute("ALTER TABLE jersey_orders ADD COLUMN shorts_size TEXT NOT NULL DEFAULT ''")
     if jersey_order_cols and "sleeve_length" not in jersey_order_cols:
         cur.execute("ALTER TABLE jersey_orders ADD COLUMN sleeve_length TEXT NOT NULL DEFAULT ''")
+    if jersey_order_cols and "kit_type" not in jersey_order_cols:
+        cur.execute("ALTER TABLE jersey_orders ADD COLUMN kit_type TEXT NOT NULL DEFAULT 'home'")
 
     cur.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
