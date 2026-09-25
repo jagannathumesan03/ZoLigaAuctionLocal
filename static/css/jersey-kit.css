@@ -209,6 +209,49 @@ html[data-theme="dark"] .jersey-kit-page .topbar {
   gap: 26px;
   align-items: start;
 }
+.jersey-kit-page .shell[hidden] {
+  display: none !important;
+}
+.jersey-kit-page .closed-panel {
+  max-width: 560px;
+  margin: 48px auto;
+  padding: 0 22px 70px;
+}
+.jersey-kit-page .closed-panel[hidden] {
+  display: none !important;
+}
+.jersey-kit-page .closed-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 28px 26px;
+  text-align: center;
+}
+.jersey-kit-page .closed-card .eyebrow {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.jersey-kit-page .closed-card h2 {
+  margin: 0 0 12px;
+  color: var(--navy);
+  font-size: 28px;
+  font-family: "Barlow Condensed", "Avenir Next", Avenir, sans-serif;
+  font-weight: 700;
+}
+.jersey-kit-page .closed-card p {
+  margin: 0 0 16px;
+  color: var(--text);
+  line-height: 1.55;
+  font-size: 15px;
+}
+.jersey-kit-page .closed-card a.ghost-btn {
+  display: inline-flex;
+  text-decoration: none;
+}
 
 .jersey-kit-page .stage {
   background: var(--stage);

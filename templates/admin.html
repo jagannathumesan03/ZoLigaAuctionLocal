@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Football Auction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=jersey-field-order-1">
+<link rel="stylesheet" href="/static/css/style.css?v=jersey-live-1">
 <script src="/static/js/theme.js?v=theme-3"></script>
 </head>
 <body class="admin-page">
@@ -143,11 +143,15 @@
       <div class="panel-heading list-heading">
         <div><p class="eyebrow">Kit orders</p><h1>Jersey requests</h1></div>
         <div class="toolbar-actions">
+          <label class="settings-toggle jersey-live-toggle" title="When off, the public order page is closed">
+            <input type="checkbox" id="jerseyOrdersLive" checked>
+            <span>Orders live</span>
+          </label>
           <span class="muted" id="jerseyOrderCount">0 orders</span>
           <button class="btn btn-sm" type="button" onclick="exportJerseyOrdersCsv()">Download CSV</button>
         </div>
       </div>
-      <p class="muted mt-8">Names, numbers, and sizes submitted from the public Jersey order page.</p>
+      <p class="muted mt-8">Names, numbers, and sizes submitted from the public Jersey order page. Turn <strong>Orders live</strong> off to hide the login link and close new orders.</p>
       <div class="filter-row mt-16 jersey-orders-filters">
         <input type="search" id="jerseyOrderSearch" placeholder="Search name, number, team…" aria-label="Search jersey orders">
         <select id="jerseyOrderTeamFilter" aria-label="Filter by team">
@@ -429,6 +433,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=jersey-filter-1"></script>
+<script src="/static/js/admin.js?v=jersey-live-1"></script>
 </body>
 </html>

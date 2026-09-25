@@ -3,6 +3,7 @@ let state = {
   callState: null, // { call: 'going_once' | 'going_twice', playerId, expiresAt } -- ephemeral, never persisted
   auctionTimerSeconds: 120,
   auctionTimerEnabled: true,
+  jerseyOrdersEnabled: true,
   waitingBackgroundUrl: '',
   jerseySizeChartUrl: '',
   shortsSizeChartUrl: '',
@@ -114,6 +115,13 @@ async function init() {
   if (jerseyKitFilter) jerseyKitFilter.addEventListener('change', renderJerseyOrders);
   if (jerseySizeFilter) jerseySizeFilter.addEventListener('change', renderJerseyOrders);
 
+  const jerseyLive = document.getElementById('jerseyOrdersLive');
+  if (jerseyLive) {
+    jerseyLive.addEventListener('change', () => {
+      saveJerseyOrdersLive(!!jerseyLive.checked);
+    });
+  }
+
   document.getElementById('playerForm').addEventListener('submit', submitPlayerForm);
   document.getElementById('teamForm').addEventListener('submit', submitTeamForm);
   document.getElementById('assignForm').addEventListener('submit', submitAssignForm);
@@ -151,6 +159,7 @@ async function loadSettings() {
   const data = await apiFetch('/api/settings');
   state.auctionTimerSeconds = data.auction_timer_seconds || 120;
   state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+  state.jerseyOrdersEnabled = data.jersey_orders_enabled !== false;
   state.waitingBackgroundUrl = data.waiting_background_url || '';
   state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
   state.shortsSizeChartUrl = data.shorts_size_chart_url || '';
@@ -377,6 +386,8 @@ function fillSettingsForm() {
   if (durationFields) durationFields.style.opacity = state.auctionTimerEnabled ? '1' : '0.45';
   if (minutesEl) minutesEl.disabled = !state.auctionTimerEnabled;
   if (secondsEl) secondsEl.disabled = !state.auctionTimerEnabled;
+  const jerseyLive = document.getElementById('jerseyOrdersLive');
+  if (jerseyLive) jerseyLive.checked = state.jerseyOrdersEnabled !== false;
   renderWaitingBgPreview();
   renderJerseySizeChartPreview();
   renderShortsSizeChartPreview();
@@ -638,6 +649,36 @@ function renderShortsSizeChartPreview() {
   }
 }
 
+async function saveJerseyOrdersLive(enabled) {
+  const liveEl = document.getElementById('jerseyOrdersLive');
+  const previous = state.jerseyOrdersEnabled !== false;
+  state.jerseyOrdersEnabled = !!enabled;
+  if (liveEl) liveEl.disabled = true;
+  try {
+    const total = Math.max(5, state.auctionTimerSeconds || 120);
+    const data = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auction_timer_seconds: total,
+        auction_timer_enabled: state.auctionTimerEnabled !== false,
+        jersey_orders_enabled: !!enabled,
+      }),
+    });
+    state.jerseyOrdersEnabled = data.jersey_orders_enabled !== false;
+    if (liveEl) liveEl.checked = state.jerseyOrdersEnabled;
+    toast(state.jerseyOrdersEnabled
+      ? 'Jersey orders are live'
+      : 'Jersey orders closed — login link hidden');
+  } catch (e) {
+    state.jerseyOrdersEnabled = previous;
+    if (liveEl) liveEl.checked = previous;
+    toast(e.message, true);
+  } finally {
+    if (liveEl) liveEl.disabled = false;
+  }
+}
+
 async function submitSettingsForm(e) {
   e.preventDefault();
   const enabled = !!document.getElementById('timerEnabled').checked;
@@ -652,10 +693,12 @@ async function submitSettingsForm(e) {
       body: JSON.stringify({
         auction_timer_seconds: total,
         auction_timer_enabled: enabled,
+        jersey_orders_enabled: state.jerseyOrdersEnabled !== false,
       }),
     });
     state.auctionTimerSeconds = data.auction_timer_seconds;
     state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+    state.jerseyOrdersEnabled = data.jersey_orders_enabled !== false;
     state.waitingBackgroundUrl = data.waiting_background_url || state.waitingBackgroundUrl;
     state.jerseySizeChartUrl = data.jersey_size_chart_url || state.jerseySizeChartUrl;
     state.shortsSizeChartUrl = data.shorts_size_chart_url || state.shortsSizeChartUrl;
@@ -984,6 +1027,9 @@ function connectSSE() {
       const data = JSON.parse(e.data);
       state.auctionTimerSeconds = data.auction_timer_seconds || state.auctionTimerSeconds;
       state.auctionTimerEnabled = data.auction_timer_enabled !== false;
+      if (typeof data.jersey_orders_enabled === 'boolean') {
+        state.jerseyOrdersEnabled = data.jersey_orders_enabled;
+      }
       state.waitingBackgroundUrl = data.waiting_background_url || '';
       state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
       state.shortsSizeChartUrl = data.shorts_size_chart_url || '';

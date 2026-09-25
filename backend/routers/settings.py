@@ -11,6 +11,7 @@ from backend.database import (
     db_cursor,
     get_auction_timer_seconds,
     is_auction_timer_enabled,
+    is_jersey_orders_enabled,
     get_setting,
     set_setting,
 )
@@ -45,6 +46,7 @@ JERSEY_FIELD_KEYS = ("team", "player_name", "jersey_number", "size", "sleeve_len
 class SettingsBody(BaseModel):
     auction_timer_seconds: int
     auction_timer_enabled: bool = True
+    jersey_orders_enabled: Optional[bool] = None
     jersey_sizes: Optional[list[str]] = None
     shorts_sizes: Optional[list[str]] = None
     jersey_form_fields: Optional[dict] = None
@@ -169,6 +171,7 @@ def _read_settings(cur):
     return {
         "auction_timer_seconds": get_auction_timer_seconds(cur),
         "auction_timer_enabled": is_auction_timer_enabled(cur),
+        "jersey_orders_enabled": is_jersey_orders_enabled(cur),
         "waiting_background_url": get_setting(cur, WAITING_BG_KEY, "") or "",
         "jersey_size_chart_url": get_setting(cur, SIZE_CHART_KEY, "") or "",
         "shorts_size_chart_url": get_setting(cur, SHORTS_SIZE_CHART_KEY, "") or "",
@@ -239,14 +242,24 @@ def get_settings(request: Request, _=Depends(require_any)):
 
 @router.get("/jersey-public")
 def get_jersey_public_settings():
-    """Public jersey page: sizes, size charts, and form field rules."""
+    """Public jersey page: sizes, size charts, form field rules, and open/closed flag."""
     with db_cursor() as cur:
         return {
+            "jersey_orders_enabled": is_jersey_orders_enabled(cur),
             "jersey_size_chart_url": get_setting(cur, SIZE_CHART_KEY, "") or "",
             "shorts_size_chart_url": get_setting(cur, SHORTS_SIZE_CHART_KEY, "") or "",
             "jersey_sizes": get_jersey_sizes(cur),
             "shorts_sizes": get_shorts_sizes(cur),
             "jersey_form_fields": get_jersey_form_fields(cur),
+        }
+
+
+@router.get("/public")
+def get_public_settings():
+    """Unauthenticated flags for login and other public surfaces."""
+    with db_cursor() as cur:
+        return {
+            "jersey_orders_enabled": is_jersey_orders_enabled(cur),
         }
 
 
@@ -258,6 +271,8 @@ async def update_settings(body: SettingsBody, request: Request, _=Depends(requir
     with db_cursor() as cur:
         set_setting(cur, "auction_timer_seconds", seconds)
         set_setting(cur, "auction_timer_enabled", "1" if body.auction_timer_enabled else "0")
+        if body.jersey_orders_enabled is not None:
+            set_setting(cur, "jersey_orders_enabled", "1" if body.jersey_orders_enabled else "0")
         if body.jersey_sizes is not None:
             sizes = [str(item).strip() for item in body.jersey_sizes if str(item).strip()]
             if not sizes:

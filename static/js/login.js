@@ -8,6 +8,21 @@ function switchRole(role) {
   document.getElementById('errorMsg').textContent = '';
 }
 
+async function refreshJerseyLink() {
+  const link = document.getElementById('tabJersey');
+  if (!link) return;
+  try {
+    const res = await fetch('/api/settings/public');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const live = data.jersey_orders_enabled !== false;
+    link.hidden = !live;
+  } catch (e) {
+    // Fail closed: hide the link if we cannot confirm orders are open.
+    link.hidden = true;
+  }
+}
+
 document.getElementById('adminForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const username = document.getElementById('adminUsername').value;
@@ -43,6 +58,7 @@ document.getElementById('viewerForm').addEventListener('submit', async (e) => {
 
 // If already logged in, redirect appropriately
 (async () => {
+  refreshJerseyLink();
   try {
     const res = await fetch('/api/auth/me');
     if (res.ok) {

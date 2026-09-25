@@ -2375,6 +2375,17 @@ body.pack-reveal-open { overflow: hidden; }
   font-weight: 700; cursor: pointer;
 }
 .settings-toggle input { width: 18px; height: 18px; }
+.jersey-live-toggle {
+  padding: 4px 10px;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  font-size: 0.85rem;
+}
+html[data-theme="light"] .jersey-live-toggle {
+  border-color: rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.03);
+}
 
 @media (max-width: 680px) {
   .slot-window { width: min(100%, 296px); }

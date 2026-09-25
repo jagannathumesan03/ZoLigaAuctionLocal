@@ -30,6 +30,7 @@ const DEFAULT_FIELDS = {
 
 const state = {
   teams: [],
+  jerseyOrdersEnabled: true,
   jerseySizeChartUrl: '',
   shortsSizeChartUrl: '',
   jerseySizes: DEFAULT_SIZES.slice(),
@@ -73,8 +74,23 @@ function $$(sel) { return Array.from(document.querySelectorAll(sel)); }
 async function init() {
   setupThemeToggle();
   setupJerseyForm();
-  await Promise.all([loadTeams(), loadJerseySettings()]);
+  await loadJerseySettings();
+  if (!state.jerseyOrdersEnabled) {
+    showJerseyClosed();
+    return;
+  }
+  await loadTeams();
   renderJerseyPage();
+}
+
+function showJerseyClosed() {
+  const closed = document.getElementById('jerseyClosed');
+  const shell = document.getElementById('jerseyLiveShell');
+  const sizeBtn = document.getElementById('sizeChartBtn');
+  if (closed) closed.hidden = false;
+  if (shell) shell.hidden = true;
+  if (sizeBtn) sizeBtn.hidden = true;
+  document.title = 'Jersey orders closed — ZoLiga';
 }
 
 const THEME_KEY = 'zoliga-jersey-theme';
@@ -114,6 +130,7 @@ async function loadTeams() {
 async function loadJerseySettings() {
   try {
     const data = await apiFetch('/api/settings/jersey-public');
+    state.jerseyOrdersEnabled = data.jersey_orders_enabled !== false;
     state.jerseySizeChartUrl = data.jersey_size_chart_url || '';
     state.shortsSizeChartUrl = data.shorts_size_chart_url || '';
     state.jerseySizes = Array.isArray(data.jersey_sizes) && data.jersey_sizes.length
@@ -124,6 +141,7 @@ async function loadJerseySettings() {
       : DEFAULT_SHORTS_SIZES.slice();
     state.jerseyFormFields = data.jersey_form_fields || JSON.parse(JSON.stringify(DEFAULT_FIELDS));
   } catch (e) {
+    state.jerseyOrdersEnabled = false;
     state.jerseySizeChartUrl = '';
     state.shortsSizeChartUrl = '';
     state.jerseySizes = DEFAULT_SIZES.slice();

@@ -233,6 +233,10 @@ def _migrate(cur):
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
         ("auction_timer_enabled", "1"),
     )
+    cur.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+        ("jersey_orders_enabled", "1"),
+    )
 
     # One-time Season 4 purse / slots / base-price alignment.
     if get_setting(cur, "season4_rules_v1", None) is None:
@@ -273,6 +277,11 @@ def get_auction_timer_seconds(cur):
 
 def is_auction_timer_enabled(cur):
     raw = get_setting(cur, "auction_timer_enabled", "1")
+    return str(raw).lower() not in ("0", "false", "off", "no", "")
+
+
+def is_jersey_orders_enabled(cur):
+    raw = get_setting(cur, "jersey_orders_enabled", "1")
     return str(raw).lower() not in ("0", "false", "off", "no", "")
 
 

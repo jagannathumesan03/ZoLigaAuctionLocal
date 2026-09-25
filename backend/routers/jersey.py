@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import Response
 
-from backend.database import db_cursor, rows_to_list
+from backend.database import db_cursor, rows_to_list, is_jersey_orders_enabled
 from backend.auth import require_admin
 from backend.sse import broadcaster
 from backend.routers.settings import get_jersey_sizes, get_shorts_sizes, get_jersey_form_fields
@@ -168,6 +168,8 @@ async def create_jersey_order(body: JerseyOrderBody, request: Request):
     )
 
     with db_cursor() as cur:
+        if not is_jersey_orders_enabled(cur):
+            raise HTTPException(status_code=403, detail="Jersey orders are closed now")
         fields = get_jersey_form_fields(cur)
         name = (body.player_name or "").strip()
         number = (body.jersey_number or "").strip()
