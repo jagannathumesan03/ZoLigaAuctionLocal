@@ -75,6 +75,7 @@
       <div class="panel-heading list-heading">
         <div><p class="eyebrow">Roster management</p><h1>Player pool</h1></div>
         <div class="toolbar-actions">
+          <button class="btn btn-sm" type="button" onclick="exportTournamentPlayersCsv()" title="CSV for tournament player upload (sold players)">Tournament players CSV</button>
           <button class="btn btn-primary btn-sm" type="button" onclick="openPlayerModal()">Add player</button>
           <label class="btn btn-sm upload-button">
             Bulk CSV Upload
@@ -82,7 +83,7 @@
           </label>
         </div>
       </div>
-      <p class="muted mt-8">CSV columns: <code>name, role, base_price, stats, stars, photo_path</code>. Use affiliation values in <code>stats</code>: Zoho Chennai, Zoho Kottarakara, Non-Zoho, Ex Zoho, or Ex ZoLiga.</p>
+      <p class="muted mt-8">CSV columns: <code>name, role, base_price, stats, stars, photo_path</code>. Use affiliation values in <code>stats</code>: Zoho Chennai, Zoho Kottarakara, Non-Zoho, Ex Zoho, or Ex ZoLiga. Use <strong>Tournament players CSV</strong> to download sold players for the tournament app (jersey number from kit orders when available).</p>
       <div class="filter-row mt-16">
         <input type="search" id="playerSearch" placeholder="Search by name or role" aria-label="Search players">
         <select id="playerStatusFilter" aria-label="Filter players by status">
@@ -131,7 +132,10 @@
     <div class="panel">
       <div class="panel-heading list-heading">
         <div><p class="eyebrow">Auction roster</p><h1>Teams and squads</h1></div>
-        <button class="btn btn-primary btn-sm" type="button" onclick="openTeamModal()">Add team</button>
+        <div class="toolbar-actions">
+          <button class="btn btn-sm" type="button" onclick="exportTournamentTeamsCsv()" title="CSV for tournament team upload">Tournament teams CSV</button>
+          <button class="btn btn-primary btn-sm" type="button" onclick="openTeamModal()">Add team</button>
+        </div>
       </div>
       <div id="teamsList" class="grid grid-teams mt-16"></div>
     </div>
@@ -433,6 +437,6 @@
 <script src="/static/js/pack-reveal.js?v=rules-1"></script>
 <script src="/static/js/player-affiliation.js?v=affiliation-2"></script>
 <script src="/static/js/player-role.js?v=role-1"></script>
-<script src="/static/js/admin.js?v=jersey-live-1"></script>
+<script src="/static/js/admin.js?v=tournament-csv-1"></script>
 </body>
 </html>

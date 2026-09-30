@@ -362,6 +362,14 @@ function exportJerseyOrdersCsv() {
   window.location.href = '/api/jersey-orders/export';
 }
 
+function exportTournamentPlayersCsv() {
+  window.location.href = '/api/players/export/tournament';
+}
+
+function exportTournamentTeamsCsv() {
+  window.location.href = '/api/teams/export/tournament';
+}
+
 async function deleteJerseyOrder(id) {
   if (!confirm('Delete this jersey order?')) return;
   try {

@@ -6,6 +6,8 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import Response
+from datetime import datetime, timezone
 
 from backend.database import (
     db_cursor,
@@ -270,3 +272,68 @@ async def bulk_upload_csv(request: Request, file: UploadFile = File(...), _=Depe
             )
             created += 1
     return {"created": created, "photos_imported": photos_imported, "errors": errors}
+
+
+def _tournament_position(role: str) -> str:
+    """Map auction role labels to tournament positions (GK/DEF/MID/FWD)."""
+    key = "".join(ch for ch in (role or "").upper() if ch.isalpha())
+    aliases = {
+        "GK": "GK", "G": "GK", "GOALKEEPER": "GK", "GOALIE": "GK", "KEEPER": "GK",
+        "DEF": "DEF", "DF": "DEF", "D": "DEF", "DEFENDER": "DEF",
+        "MID": "MID", "MF": "MID", "M": "MID", "MIDFIELDER": "MID",
+        "FWD": "FWD", "FW": "FWD", "F": "FWD", "FORWARD": "FWD", "STRIKER": "FWD",
+        "ST": "FWD", "CF": "FWD",
+    }
+    return aliases.get(key, "MID")
+
+
+@router.get("/export/tournament")
+def export_tournament_players_csv(request: Request, _=Depends(require_admin)):
+    """CSV for ZoLiga tournament player upload: player name, number, position, teamname."""
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            SELECT p.name AS player_name,
+                   p.role AS role,
+                   t.name AS team_name,
+                   (
+                     SELECT jo.jersey_number
+                     FROM jersey_orders jo
+                     WHERE jo.team_id = p.team_id
+                       AND lower(trim(jo.player_name)) = lower(trim(p.name))
+                       AND trim(coalesce(jo.jersey_number, '')) != ''
+                     ORDER BY jo.id DESC
+                     LIMIT 1
+                   ) AS jersey_number
+            FROM players p
+            JOIN teams t ON t.id = p.team_id
+            WHERE p.status = 'sold' AND p.team_id IS NOT NULL
+            ORDER BY t.name COLLATE NOCASE, p.name COLLATE NOCASE
+            """
+        )
+        rows = cur.fetchall()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["player name", "player number", "position", "teamname"])
+    for row in rows:
+        number_raw = (row["jersey_number"] or "").strip()
+        try:
+            number = int(float(number_raw)) if number_raw else 0
+        except ValueError:
+            number = 0
+        writer.writerow([
+            row["player_name"] or "",
+            number,
+            _tournament_position(row["role"] or ""),
+            row["team_name"] or "",
+        ])
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="tournament-players-{stamp}.csv"',
+        },
+    )

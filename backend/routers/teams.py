@@ -1,9 +1,14 @@
 import os
 import shutil
 import uuid
+import csv
+import io
+import re
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import Response
 
 from backend.database import (
     db_cursor,
@@ -237,6 +242,35 @@ def update_team(
             )
         cur.execute("SELECT * FROM teams WHERE id = ?", (team_id,))
         return team_with_squad(cur, cur.fetchone())
+
+
+@router.get("/export/tournament")
+def export_tournament_teams_csv(request: Request, _=Depends(require_admin)):
+    """CSV for ZoLiga tournament team upload: team name, short name, group."""
+    with db_cursor() as cur:
+        cur.execute("SELECT name FROM teams ORDER BY name COLLATE NOCASE")
+        rows = cur.fetchall()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["team name", "short name", "group"])
+    for row in rows:
+        name = (row["name"] or "").strip()
+        if not name:
+            continue
+        letters = re.sub(r"[^A-Za-z0-9]", "", name)
+        short = (letters[:3].upper() if letters else "TMX").ljust(3, "X")[:5]
+        # Group is assigned in the tournament app
+        writer.writerow([name, short, ""])
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="tournament-teams-{stamp}.csv"',
+        },
+    )
 
 
 @router.delete("/{team_id}")
