@@ -246,14 +246,14 @@ def update_team(
 
 @router.get("/export/tournament")
 def export_tournament_teams_csv(request: Request, _=Depends(require_admin)):
-    """CSV for ZoLiga tournament team upload: team name, short name, group."""
+    """CSV for ZoLiga tournament team upload: team name, short name, group, logo."""
     with db_cursor() as cur:
-        cur.execute("SELECT name FROM teams ORDER BY name COLLATE NOCASE")
+        cur.execute("SELECT name, logo_url FROM teams ORDER BY name COLLATE NOCASE")
         rows = cur.fetchall()
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["team name", "short name", "group"])
+    writer.writerow(["team name", "short name", "group", "logo_url"])
     for row in rows:
         name = (row["name"] or "").strip()
         if not name:
@@ -261,7 +261,7 @@ def export_tournament_teams_csv(request: Request, _=Depends(require_admin)):
         letters = re.sub(r"[^A-Za-z0-9]", "", name)
         short = (letters[:3].upper() if letters else "TMX").ljust(3, "X")[:5]
         # Group is assigned in the tournament app
-        writer.writerow([name, short, ""])
+        writer.writerow([name, short, "", row["logo_url"] or ""])
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     return Response(

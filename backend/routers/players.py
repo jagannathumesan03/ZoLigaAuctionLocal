@@ -289,12 +289,13 @@ def _tournament_position(role: str) -> str:
 
 @router.get("/export/tournament")
 def export_tournament_players_csv(request: Request, _=Depends(require_admin)):
-    """CSV for ZoLiga tournament player upload: player name, number, position, teamname."""
+    """CSV for ZoLiga tournament player upload: name, number, position, team, photo."""
     with db_cursor() as cur:
         cur.execute(
             """
             SELECT p.name AS player_name,
                    p.role AS role,
+                   p.photo_url AS photo_url,
                    t.name AS team_name,
                    (
                      SELECT jo.jersey_number
@@ -315,7 +316,7 @@ def export_tournament_players_csv(request: Request, _=Depends(require_admin)):
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["player name", "player number", "position", "teamname"])
+    writer.writerow(["player name", "player number", "position", "teamname", "photo_url"])
     for row in rows:
         number_raw = (row["jersey_number"] or "").strip()
         try:
@@ -327,6 +328,7 @@ def export_tournament_players_csv(request: Request, _=Depends(require_admin)):
             number,
             _tournament_position(row["role"] or ""),
             row["team_name"] or "",
+            row["photo_url"] or "",
         ])
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
