@@ -289,13 +289,14 @@ def _tournament_position(role: str) -> str:
 
 @router.get("/export/tournament")
 def export_tournament_players_csv(request: Request, _=Depends(require_admin)):
-    """CSV for ZoLiga tournament player upload: name, number, position, team, photo."""
+    """CSV for ZoLiga tournament player upload: name, number, position, team, photo, stars."""
     with db_cursor() as cur:
         cur.execute(
             """
             SELECT p.name AS player_name,
                    p.role AS role,
                    p.photo_url AS photo_url,
+                   p.stars AS stars,
                    t.name AS team_name,
                    (
                      SELECT jo.jersey_number
@@ -316,19 +317,25 @@ def export_tournament_players_csv(request: Request, _=Depends(require_admin)):
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["player name", "player number", "position", "teamname", "photo_url"])
+    writer.writerow(["player name", "player number", "position", "teamname", "photo_url", "stars"])
     for row in rows:
         number_raw = (row["jersey_number"] or "").strip()
         try:
             number = int(float(number_raw)) if number_raw else 0
         except ValueError:
             number = 0
+        stars = row["stars"]
+        try:
+            stars_out = float(stars) if stars is not None else 3.0
+        except (TypeError, ValueError):
+            stars_out = 3.0
         writer.writerow([
             row["player_name"] or "",
             number,
             _tournament_position(row["role"] or ""),
             row["team_name"] or "",
             row["photo_url"] or "",
+            stars_out,
         ])
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
